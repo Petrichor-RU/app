@@ -12,9 +12,24 @@ dependencies:
   - $compose.hotReload.runtimeApi
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
+  - $libs.ktor.client.core
+  - $libs.kotlinx.serialization.json
+  - $libs.compass.geolocation
 
 dependencies@android:
   - $compose.uiTooling
+  - $libs.compass.geolocation.mobile
+  - $libs.ktor.client.cio
+
+dependencies@ios:
+  - $libs.compass.geolocation.mobile
+  - $libs.ktor.client.darwin
+
+dependencies@jvm:
+  - $libs.ktor.client.cio
+
+dependencies@wasmJs:
+  - $libs.compass.geolocation.browser
 
 settings:
   compose:

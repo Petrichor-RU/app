@@ -27,6 +27,11 @@ command line:
 
 Run the project's tests with `./kotlin test`, or `./kotlin test -m <module>` for a single module.
 
+## Weather API setup
+
+Petrichor uses OpenWeather for current conditions and the five-day forecast. Add your key to
+`WeatherConfig.openWeatherApiKey` in `shared/src/data/weather/WeatherRepository.kt`.
+
 ---
 
 Learn more
