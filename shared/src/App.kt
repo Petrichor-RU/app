@@ -58,18 +58,18 @@ fun App() {
                             coroutineScope.launch { pagerState.animateScrollToPage(pagerState.pageForTab(1)) }
                         }, icon = {
                             MaterialSymbol(
-                                iconName = MaterialSymbols.CLOUD,
-                                contentDescription = null,
-                            )
-                        }, label = { Text("Weather") })
-                        NavigationBarItem(selected = selectedTab == 2, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(pagerState.pageForTab(2)) }
-                        }, icon = {
-                            MaterialSymbol(
                                 iconName = MaterialSymbols.SETTINGS,
                                 contentDescription = null,
                             )
                         }, label = { Text("Settings") })
+                        NavigationBarItem(selected = selectedTab == 2, onClick = {
+                            coroutineScope.launch { pagerState.animateScrollToPage(pagerState.pageForTab(2)) }
+                        }, icon = {
+                            MaterialSymbol(
+                                iconName = MaterialSymbols.CLOUD,
+                                contentDescription = null,
+                            )
+                        }, label = { Text("Weather") })
                     }
                 },
             ) { padding ->
