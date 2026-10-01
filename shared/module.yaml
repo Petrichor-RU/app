@@ -15,6 +15,7 @@ dependencies:
   - $libs.ktor.client.core
   - $libs.kotlinx.serialization.json
   - $libs.compass.geolocation
+  - $libs.material.symbols
 
 dependencies@android:
   - $compose.uiTooling
