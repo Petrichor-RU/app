@@ -9,3 +9,8 @@ captures
 !**/module.xcodeproj/project.xcworkspace/
 **/xcshareddata/WorkspaceSettings.xcsettings
 xcuserdata
+
+# Environment files
+.env
+.env.local
+.env.*.local
