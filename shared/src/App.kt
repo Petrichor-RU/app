@@ -1,10 +1,7 @@
 package nl.petrichor.app
 
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
@@ -41,10 +38,8 @@ fun App() {
         MaterialTheme {
             Scaffold(
                 containerColor = Color(0xFFF6F8FC),
-                topBar = {
+                bottomBar = {
                     NavigationBar(
-                        modifier = Modifier.windowInsetsPadding(WindowInsets.statusBars),
-                        windowInsets = WindowInsets(0, 0, 0, 0),
                     ) {
                         NavigationBarItem(selected = selectedTab == 0, onClick = {
                             coroutineScope.launch { pagerState.animateScrollToPage(pagerState.pageForTab(0)) }
