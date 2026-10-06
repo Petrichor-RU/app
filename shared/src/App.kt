@@ -10,7 +10,6 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -22,17 +21,12 @@ import nl.petrichor.app.ui.BoxMessage
 import nl.petrichor.app.ui.WeatherScreen
 
 private const val tabCount = 3
-private const val pagerPageCount = 1001
 
 @Composable
 fun App() {
-    val initialPage = remember {
-        val middlePage = pagerPageCount / 2
-        middlePage - (middlePage % tabCount) + 1
-    }
-    val pagerState = rememberPagerState(initialPage = initialPage, pageCount = { pagerPageCount })
+    val pagerState = rememberPagerState(initialPage = 0, pageCount = { tabCount })
     val coroutineScope = rememberCoroutineScope()
-    val selectedTab = pagerState.currentPage.mod(tabCount)
+    val selectedTab = pagerState.currentPage
 
     MaterialSymbolsRenderingScope {
         MaterialTheme {
@@ -42,7 +36,7 @@ fun App() {
                     NavigationBar(
                     ) {
                         NavigationBarItem(selected = selectedTab == 0, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(pagerState.pageForTab(0)) }
+                            coroutineScope.launch { pagerState.animateScrollToPage(0) }
                         }, icon = {
                             MaterialSymbol(
                                 iconName = MaterialSymbols.HOME,
@@ -50,7 +44,7 @@ fun App() {
                             )
                         }, label = { Text("One") })
                         NavigationBarItem(selected = selectedTab == 1, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(pagerState.pageForTab(1)) }
+                            coroutineScope.launch { pagerState.animateScrollToPage(1) }
                         }, icon = {
                             MaterialSymbol(
                                 iconName = MaterialSymbols.SETTINGS,
@@ -58,7 +52,7 @@ fun App() {
                             )
                         }, label = { Text("Settings") })
                         NavigationBarItem(selected = selectedTab == 2, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(pagerState.pageForTab(2)) }
+                            coroutineScope.launch { pagerState.animateScrollToPage(2) }
                         }, icon = {
                             MaterialSymbol(
                                 iconName = MaterialSymbols.CLOUD,
@@ -74,7 +68,7 @@ fun App() {
                         .fillMaxSize()
                         .padding(padding),
                 ) { page ->
-                    when (page.mod(tabCount)) {
+                    when (page) {
                         2 -> WeatherScreen()
                         else -> BoxMessage("This tab is coming soon.")
                     }
@@ -83,12 +77,4 @@ fun App() {
         }
     }
 
-}
-
-private fun androidx.compose.foundation.pager.PagerState.pageForTab(tab: Int): Int {
-    val currentTab = currentPage.mod(tabCount)
-    val forwardDistance = (tab - currentTab + tabCount) % tabCount
-    val backwardDistance = forwardDistance - tabCount
-    val distance = if (forwardDistance <= -backwardDistance) forwardDistance else backwardDistance
-    return (currentPage + distance).coerceIn(0, pagerPageCount - 1)
 }
