@@ -5,6 +5,7 @@ androidx-lifecycle = "2.11.0"
 kotlinx-coroutines = "1.11.0"
 ktor = "3.3.0"
 compass = "4.0.0"
+material-symbols = "1.0.1"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -19,3 +20,4 @@ kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serializa
 compass-geolocation = { module = "dev.jordond.compass:geolocation", version.ref = "compass" }
 compass-geolocation-mobile = { module = "dev.jordond.compass:geolocation-mobile", version.ref = "compass" }
 compass-geolocation-browser = { module = "dev.jordond.compass:geolocation-browser", version.ref = "compass" }
+material-symbols = { module = "dev.catbit:material-symbols", version.ref = "material-symbols" }

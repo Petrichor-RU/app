@@ -11,3 +11,4 @@ settings:
   android:
     namespace: nl.petrichor.app
     applicationId: nl.petrichor.app
+    minSdk: 26
