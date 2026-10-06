@@ -1,15 +1,5 @@
 package nl.petrichor.app.data.weather
 
-/**
- * Configuration for Weather API settings.
- * These values can be overridden per platform or via environment variables.
- */
-object WeatherConfig {
-    // Default values that can be overridden
-    var openWeatherApiKey: String = System.getenv("OPEN_WEATHER_API_KEY") ?: "32c4c52a937c29140a466c2fdbce80f7"
-    var weatherApiBase: String = System.getenv("WEATHER_API_BASE") ?: "https://api.openweathermap.org"
-}
-
 data class Coordinates(val latitude: Double, val longitude: Double)
 data class Place(val name: String, val coordinates: Coordinates)
 data class WeatherSnapshot(

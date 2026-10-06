@@ -9,21 +9,21 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
-
+import nl.petrichor.app.AppConfig
 
 
 class WeatherRepository(
     private val client: HttpClient = weatherHttpClient(),
-    private val apiKey: String = WeatherConfig.openWeatherApiKey,
+    private val apiKey: String = AppConfig.OPENWEATHER_API_KEY,
 ) {
     suspend fun load(place: Place): Result<WeatherSnapshot> = runCatching {
-        require(apiKey.isNotBlank()) { "Add your OpenWeather API key to WeatherConfig.openWeatherApiKey." }
+        require(apiKey.isNotBlank()) { "Add your OpenWeather API key to AppConfig.OpenWeatherApiKey." }
         val query = "lat=${place.coordinates.latitude}&lon=${place.coordinates.longitude}&units=metric&appid=$apiKey"
         val current = Json.parseToJsonElement(
-            client.get("${WeatherConfig.weatherApiBase}/data/2.5/weather?$query").bodyAsText(),
+            client.get("${AppConfig.OPENWEATHER_API_BASE}/data/2.5/weather?$query").bodyAsText(),
         ).jsonObject
         val forecast = Json.parseToJsonElement(
-            client.get("${WeatherConfig.weatherApiBase}/data/2.5/forecast?$query").bodyAsText(),
+            client.get("${AppConfig.OPENWEATHER_API_BASE}/data/2.5/forecast?$query").bodyAsText(),
         ).jsonObject
         val currentWeather = current["weather"]!!.jsonArray.first().jsonObject
         val main = current["main"]!!.jsonObject
