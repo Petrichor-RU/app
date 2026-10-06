@@ -1,10 +1,5 @@
 package nl.petrichor.app.data.weather
 
-object WeatherConfig {
-    const val openWeatherApiKey = ""
-    const val weatherApiBase = "https://api.openweathermap.org"
-}
-
 data class Coordinates(val latitude: Double, val longitude: Double)
 data class Place(val name: String, val coordinates: Coordinates)
 data class WeatherSnapshot(
