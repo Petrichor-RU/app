@@ -1,11 +1,15 @@
 [versions]
-logback = "1.6.2"
+logback = "1.6.5"
 androidx-activity-compose = "1.13.0"
 androidx-lifecycle = "2.11.0"
 kotlinx-coroutines = "1.11.0"
-ktor = "3.3.0"
+ktor = "3.6.0"
 compass = "4.0.0"
 material-symbols = "1.0.1"
+room = "2.8.5"
+ksp = "2.1.10-1.0.29"
+sqlite = "2.7.1"
+imagepickerkmp = "1.1.0"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -21,3 +25,12 @@ compass-geolocation = { module = "dev.jordond.compass:geolocation", version.ref 
 compass-geolocation-mobile = { module = "dev.jordond.compass:geolocation-mobile", version.ref = "compass" }
 compass-geolocation-browser = { module = "dev.jordond.compass:geolocation-browser", version.ref = "compass" }
 material-symbols = { module = "dev.catbit:material-symbols", version.ref = "material-symbols" }
+
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+imagepickerkmp = { module = "io.github.ismoy:imagepickerkmp", version.ref = "imagepickerkmp" }
+
+[plugins]
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+room = { id = "androidx.room", version.ref = "room" }

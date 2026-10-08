@@ -1,6 +1,6 @@
 product:
   type: kmp/lib
-  platforms: [ jvm, android, iosArm64, iosSimulatorArm64, wasmJs ]
+  platforms: [ jvm, android, iosArm64, iosSimulatorArm64 ]
 
 dependencies:
   - $compose.runtime
@@ -16,6 +16,9 @@ dependencies:
   - $libs.kotlinx.serialization.json
   - $libs.compass.geolocation
   - $libs.material.symbols
+  - $libs.androidx.room.runtime
+  - $libs.sqlite.bundled
+  - $libs.imagepickerkmp
 
 dependencies@android:
   - $compose.uiTooling
@@ -29,8 +32,6 @@ dependencies@ios:
 dependencies@jvm:
   - $libs.ktor.client.cio
 
-dependencies@wasmJs:
-  - $libs.compass.geolocation.browser
 
 settings:
   compose:
@@ -39,3 +40,7 @@ settings:
       packageName: nl.petrichor.app.resources
       # Generate public accessors so other modules (and previews) can use Res.*
       exposedAccessors: true
+  kotlin:
+    ksp:
+      processors:
+        - $libs.androidx.room.compiler
