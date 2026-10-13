@@ -2,6 +2,7 @@ package nl.petrichor.app.ui.wardrobe
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,10 +34,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingImageStorage
 import nl.petrichor.app.data.wardrobe.ClothingType
+import nl.petrichor.app.data.wardrobe.Material
 import io.github.ismoy.imagepickerkmp.config.CropConfig
 import io.github.ismoy.imagepickerkmp.config.GalleryConfig
 import io.github.ismoy.imagepickerkmp.extensions.loadPainter
@@ -53,21 +54,25 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddClothingDialog(
     clothing: ClothingPiece? = null,
+    clothingTypes: List<ClothingType>,
     onDismiss: () -> Unit,
     onSave: (ClothingPiece) -> Unit
 ) {
-    // Use existing clothing data or defaults for add mode
+    // Use existing clothing data; a type must be selected for new items.
     val isEditing = clothing != null
     var name by remember { mutableStateOf(clothing?.name.orEmpty()) }
-    var selectedType by remember { mutableStateOf(clothing?.type ?: ClothingType.T_SHIRT) }
-    var material by remember { mutableStateOf(clothing?.material.orEmpty()) }
+    var selectedTypeId by remember { mutableStateOf(clothing?.typeId) }
+    var selectedMaterial by remember {
+        mutableStateOf(clothing?.material?.takeUnless { it == Material.UNKNOWN })
+    }
     var notes by remember { mutableStateOf(clothing?.notes.orEmpty()) }
     var isSaving by remember { mutableStateOf(false) }
     var showTypeMenu by remember { mutableStateOf(false) }
+    var showMaterialMenu by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var useNewImage by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
-    
+
     val imagePicker = rememberImagePickerKMP(
         ImagePickerKMPConfig(
             galleryConfig = GalleryConfig(allowMultiple = false),
@@ -83,8 +88,7 @@ fun AddClothingDialog(
         clothing?.imagePath
     }
 
-    MaterialSymbolsRenderingScope {
-        AlertDialog(
+    AlertDialog(
             onDismissRequest = {  },
             title = { Text(if (isEditing) "Edit Clothing Item" else "Add Clothing Item") },
             text = {
@@ -113,7 +117,7 @@ fun AddClothingDialog(
                                 }
                             }
                             currentImagePath?.isNotEmpty() == true -> {
-                                val painter = PhotoResult(uri = currentImagePath).loadPainter()
+                                val painter = currentImagePath.let { PhotoResult(uri = it).loadPainter() }
                                 if (painter != null) {
                                     Image(
                                         painter = painter,
@@ -146,21 +150,21 @@ fun AddClothingDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { 
+                            onClick = {
                                 useNewImage = true
-                                imagePicker.launchGallery() 
+                                imagePicker.launchGallery()
                             },
                             modifier = Modifier.weight(1f)
                         ) { Text("Gallery") }
                         Button(
-                            onClick = { 
+                            onClick = {
                                 useNewImage = true
-                                imagePicker.launchCamera() 
+                                imagePicker.launchCamera()
                             },
                             modifier = Modifier.weight(1f)
                         ) { Text("Camera") }
                     }
-                    
+
                     // Option to keep current image (only for editing existing items with images)
                     if (isEditing && clothing.imagePath.isNotEmpty()) {
                         Row(
@@ -203,13 +207,16 @@ fun AddClothingDialog(
 
                     // Type selection with dropdown
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("Type:", style = MaterialTheme.typography.bodySmall)
+                        Text("Type (required):", style = MaterialTheme.typography.bodySmall)
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                showTypeMenu = true
+                            },
                         ) {
                             Text(
-                                text = selectedType.displayName,
+                                text = clothingTypes.firstOrNull { it.id == selectedTypeId }?.name
+                                    ?: "Select type (required)",
                                 modifier = Modifier.weight(1f)
                             )
                             IconButton(onClick = { showTypeMenu = true }) {
@@ -218,16 +225,16 @@ fun AddClothingDialog(
                                     contentDescription = "Select type"
                                 )
                             }
-                            
+
                             DropdownMenu(
                                 expanded = showTypeMenu,
                                 onDismissRequest = { showTypeMenu = false }
                             ) {
-                                ClothingType.entries.forEach { type ->
+                                clothingTypes.forEach { type ->
                                     DropdownMenuItem(
-                                        text = { Text(type.displayName) },
+                                        text = { Text(type.name) },
                                         onClick = {
-                                            selectedType = type
+                                            selectedTypeId = type.id
                                             showTypeMenu = false
                                         }
                                     )
@@ -236,14 +243,47 @@ fun AddClothingDialog(
                         }
                     }
 
-                    // Material field
-                    OutlinedTextField(
-                        value = material,
-                        onValueChange = { material = it },
-                        label = { Text("Material (optional)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Text("Material (optional):", style = MaterialTheme.typography.bodySmall)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth().clickable {
+                                showMaterialMenu = true
+                            },
+                        ) {
+                            Text(
+                                text = selectedMaterial?.displayName ?: "Not selected",
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { showMaterialMenu = true }) {
+                                MaterialSymbol(
+                                    iconName = MaterialSymbols.ARROW_DROP_DOWN,
+                                    contentDescription = "Select material"
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = showMaterialMenu,
+                                onDismissRequest = { showMaterialMenu = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Not selected") },
+                                    onClick = {
+                                        selectedMaterial = null
+                                        showMaterialMenu = false
+                                    }
+                                )
+                                Material.entries.filter { it != Material.UNKNOWN }.forEach { material ->
+                                    DropdownMenuItem(
+                                        text = { Text(material.displayName) },
+                                        onClick = {
+                                            selectedMaterial = material
+                                            showMaterialMenu = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
 
                     // Notes field
                     OutlinedTextField(
@@ -259,6 +299,10 @@ fun AddClothingDialog(
             confirmButton = {
                 TextButton(
                     onClick = {
+                        val typeId = selectedTypeId ?: run {
+                            saveError = "Please select a clothing type."
+                            return@TextButton
+                        }
                         isSaving = true
                         saveError = null
                         coroutineScope.launch {
@@ -272,19 +316,19 @@ fun AddClothingDialog(
                                         ClothingImageStorage.copyToPermanentStorage(it)
                                     }.orEmpty()
                                 }
-                                
+
                                 onSave(
                                     (clothing ?: ClothingPiece(
                                         name = null,
-                                        type = selectedType,
-                                        material = null,
+                                        typeId = typeId,
+                                        material = Material.UNKNOWN,
                                         notes = null,
                                         imagePath = "",
                                         thumbnailPath = ""
                                     )).copy(
                                         name = name.ifEmpty { null },
-                                        type = selectedType,
-                                        material = material.ifEmpty { null },
+                                        typeId = typeId,
+                                        material = selectedMaterial ?: Material.UNKNOWN,
                                         notes = notes.ifEmpty { null },
                                         imagePath = imagePath,
                                         thumbnailPath = imagePath
@@ -297,7 +341,7 @@ fun AddClothingDialog(
                             }
                         }
                     },
-                    enabled = !isSaving
+                    enabled = !isSaving && selectedTypeId != null
                 ) {
                     if (isSaving) {
                         CircularProgressIndicator(Modifier.size(20.dp))
@@ -316,4 +360,3 @@ fun AddClothingDialog(
             }
         )
     }
-}

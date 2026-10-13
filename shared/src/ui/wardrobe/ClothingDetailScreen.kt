@@ -34,8 +34,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import nl.petrichor.app.data.wardrobe.ClothingPiece
+import nl.petrichor.app.data.wardrobe.ClothingType
+import nl.petrichor.app.data.wardrobe.Material
 import io.github.ismoy.imagepickerkmp.extensions.loadPainter
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
 
@@ -45,6 +46,7 @@ import io.github.ismoy.imagepickerkmp.picker.PhotoResult
 @Composable
 fun ClothingDetailScreen(
     clothing: ClothingPiece,
+    clothingType: ClothingType,
     onDismiss: () -> Unit,
     onEdit: (ClothingPiece) -> Unit,
     onDelete: (ClothingPiece) -> Unit,
@@ -173,14 +175,14 @@ fun ClothingDetailScreen(
                 DetailRow(
                     icon = MaterialSymbols.CATEGORY,
                     label = "Type",
-                    value = clothing.type.displayName
+                    value = clothingType.name
                 )
 
-                clothing.material?.let { material ->
+                clothing.material.takeUnless { it == Material.UNKNOWN }?.let { material ->
                     DetailRow(
                         icon = MaterialSymbols.DESCRIPTION,
                         label = "Material",
-                        value = material
+                        value = material.displayName
                     )
                 }
 
@@ -207,30 +209,28 @@ private fun DetailRow(
     value: String,
     isMultiline: Boolean = false
 ) {
-    MaterialSymbolsRenderingScope {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            MaterialSymbol(
-                iconName = icon,
-                contentDescription = label,
-                modifier = Modifier.size(25.dp)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        MaterialSymbol(
+            iconName = icon,
+            contentDescription = label,
+            modifier = Modifier.size(25.dp)
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                )
-                Text(
-                    text = value,
-                    style = if (isMultiline) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
-                    maxLines = if (isMultiline) Int.MAX_VALUE else 1,
-                    overflow = if (isMultiline) TextOverflow.Clip else TextOverflow.Ellipsis
-                )
-            }
+            Text(
+                text = value,
+                style = if (isMultiline) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodyLarge,
+                maxLines = if (isMultiline) Int.MAX_VALUE else 1,
+                overflow = if (isMultiline) TextOverflow.Clip else TextOverflow.Ellipsis
+            )
         }
     }
 }

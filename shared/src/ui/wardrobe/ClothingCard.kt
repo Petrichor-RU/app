@@ -19,7 +19,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import io.github.ismoy.imagepickerkmp.extensions.loadPainter
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
@@ -53,13 +52,11 @@ fun ClothingCard(
                     contentScale = ContentScale.Crop
                 )
             } else {
-                MaterialSymbolsRenderingScope {
-                    MaterialSymbol(
-                        iconName = MaterialSymbols.IMAGE,
-                        contentDescription = clothing.name ?: "Clothing item",
-                        modifier = Modifier.fillMaxSize(0.5f)
-                    )
-                }
+                MaterialSymbol(
+                    iconName = MaterialSymbols.IMAGE,
+                    contentDescription = clothing.name ?: "Clothing item",
+                    modifier = Modifier.fillMaxSize(0.5f)
+                )
             }
 
             // Optional name overlay at bottom

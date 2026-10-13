@@ -3,6 +3,7 @@ package nl.petrichor.app.data.wardrobe
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.withContext
 
 /**
@@ -18,7 +19,16 @@ class WardrobeRepository(
     fun getAllClothing(): Flow<List<ClothingPiece>> = clothingDao.getAll()
 
     // Get clothing by type
-    fun getClothingByType(type: ClothingType): Flow<List<ClothingPiece>> = clothingDao.getByType(type)
+    fun getClothingByType(type: ClothingType): Flow<List<ClothingPiece>> = clothingDao.getByType(type.id)
+
+    fun getClothingTypes(): Flow<List<ClothingType>> =
+        clothingDao.getTypes().onStart {
+            clothingDao.insertTypes(BuiltInClothingTypes.all)
+        }
+
+    suspend fun addClothingType(type: ClothingType): Long = withContext(ioDispatcher) {
+        clothingDao.insertType(type)
+    }
 
     // Get single clothing item
     suspend fun getClothingItem(id: Long): ClothingPiece? = withContext(ioDispatcher) {

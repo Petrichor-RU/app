@@ -17,7 +17,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import nl.petrichor.app.data.wardrobe.ClothingType
 
 /**
@@ -25,8 +24,8 @@ import nl.petrichor.app.data.wardrobe.ClothingType
  */
 @Composable
 fun WardrobeFilterBar(
-    selectedType: ClothingType?,
-    onTypeSelected: (ClothingType?) -> Unit,
+    clothingTypes: List<ClothingType>,
+    onTypeSelected: (Long?) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -37,37 +36,35 @@ fun WardrobeFilterBar(
             .padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.End
     ) {
-        MaterialSymbolsRenderingScope {
-            IconButton(onClick = { showMenu = true }) {
-                MaterialSymbol(
-                    iconName = MaterialSymbols.FILTER_LIST,
-                    contentDescription = "Filter"
-                )
-            }
-            
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false }
-            ) {
-                // All Types option
+        IconButton(onClick = { showMenu = true }) {
+            MaterialSymbol(
+                iconName = MaterialSymbols.FILTER_LIST,
+                contentDescription = "Filter"
+            )
+        }
+
+        DropdownMenu(
+            expanded = showMenu,
+            onDismissRequest = { showMenu = false }
+        ) {
+            // All Types option
+            DropdownMenuItem(
+                text = { Text("All Types") },
+                onClick = {
+                    onTypeSelected(null)
+                    showMenu = false
+                }
+            )
+
+            // Individual types
+            clothingTypes.forEach { type ->
                 DropdownMenuItem(
-                    text = { Text("All Types") },
+                    text = { Text(type.name) },
                     onClick = {
-                        onTypeSelected(null)
+                        onTypeSelected(type.id)
                         showMenu = false
                     }
                 )
-
-                // Individual types
-                ClothingType.entries.forEach { type ->
-                    DropdownMenuItem(
-                        text = { Text(type.displayName) },
-                        onClick = {
-                            onTypeSelected(type)
-                            showMenu = false
-                        }
-                    )
-                }
             }
         }
     }

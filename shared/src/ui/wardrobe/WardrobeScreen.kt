@@ -36,10 +36,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.wardrobe.ClothingPiece
-import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.WardrobeRepository
 
 import nl.petrichor.app.ui.BoxMessage
@@ -51,6 +49,7 @@ import nl.petrichor.app.platform.BackHandler
 class WardrobeViewModel : ViewModel() {
     private val repository = WardrobeRepository()
     val allClothing = repository.getAllClothing()
+    val clothingTypes = repository.getClothingTypes()
     
     private val _snackbarMessage = mutableStateOf<String?>(null)
     val snackbarMessage: String? get() = _snackbarMessage.value
@@ -85,7 +84,8 @@ fun WardrobeScreen(
 ) {
     val viewModel = remember { WardrobeViewModel() }
     val allClothing by viewModel.allClothing.collectAsStateWithLifecycle(emptyList())
-    var selectedType by remember { mutableStateOf<ClothingType?>(null) }
+    val clothingTypes by viewModel.clothingTypes.collectAsStateWithLifecycle(emptyList())
+    var selectedTypeId by remember { mutableStateOf<Long?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedClothingId by rememberSaveable { mutableStateOf<Long?>(null) }
     val selectedClothing = allClothing.firstOrNull { it.id == selectedClothingId }
@@ -121,12 +121,10 @@ fun WardrobeScreen(
                 FloatingActionButton(
                     onClick = { showAddDialog = true }
                 ) {
-                    MaterialSymbolsRenderingScope {
-                        MaterialSymbol(
-                            iconName = MaterialSymbols.ADD,
-                            contentDescription = "Add clothing"
-                        )
-                    }
+                    MaterialSymbol(
+                        iconName = MaterialSymbols.ADD,
+                        contentDescription = "Add clothing"
+                    )
                 }
             }
         }
@@ -138,8 +136,10 @@ fun WardrobeScreen(
         ) {
                 // Filter bar
                 WardrobeFilterBar(
-                    selectedType = selectedType,
-                    onTypeSelected = { selectedType = it }
+                    clothingTypes = clothingTypes,
+                    onTypeSelected = { typeId ->
+                        selectedTypeId = typeId
+                    }
                 )
 
                 // Clothing grid
@@ -149,10 +149,10 @@ fun WardrobeScreen(
                         modifier = Modifier.fillMaxWidth().weight(1f)
                     )
                 } else {
-                    val filteredClothing = if (selectedType == null) {
+                    val filteredClothing = if (selectedTypeId == null) {
                         allClothing
                     } else {
-                        allClothing.filter { it.type == selectedType }
+                        allClothing.filter { it.typeId == selectedTypeId }
                     }
 
                     if (filteredClothing.isEmpty()) {
@@ -186,20 +186,22 @@ fun WardrobeScreen(
         }
 
         selectedClothing?.let { clothing ->
-            AnimatedVisibility(
-                visibleState = detailTransition,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .zIndex(1f),
-                enter = slideInVertically(
-                    initialOffsetY = { fullHeight -> fullHeight }
-                ) + fadeIn(),
-                exit = slideOutVertically(
-                    targetOffsetY = { fullHeight -> fullHeight }
-                ) + fadeOut()
-            ) {
+            clothingTypes.firstOrNull { it.id == clothing.typeId }?.let { clothingType ->
+                AnimatedVisibility(
+                    visibleState = detailTransition,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .zIndex(1f),
+                    enter = slideInVertically(
+                        initialOffsetY = { fullHeight -> fullHeight }
+                    ) + fadeIn(),
+                    exit = slideOutVertically(
+                        targetOffsetY = { fullHeight -> fullHeight }
+                    ) + fadeOut()
+                ) {
                     ClothingDetailScreen(
                         clothing = clothing,
+                        clothingType = clothingType,
                         modifier = Modifier.fillMaxSize(),
                         onDismiss = { showDetailDialog = false },
                         onEdit = { showEditDialog = true },
@@ -209,6 +211,7 @@ fun WardrobeScreen(
                             selectedClothingId = null
                         }
                     )
+                }
             }
         }
 
@@ -216,6 +219,7 @@ fun WardrobeScreen(
         if (showAddDialog) {
             AddClothingDialog(
                 clothing = null,
+                clothingTypes = clothingTypes,
                 onDismiss = { showAddDialog = false },
                 onSave = { clothing ->
                     viewModel.addClothing(clothing)
@@ -227,6 +231,7 @@ fun WardrobeScreen(
         if (showEditDialog && selectedClothing != null) {
             AddClothingDialog(
                 clothing = selectedClothing,
+                clothingTypes = clothingTypes,
                 onDismiss = { 
                     showEditDialog = false
                 },
