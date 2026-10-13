@@ -3,7 +3,6 @@ package nl.petrichor.app.data.location
 import kotlinx.serialization.Serializable
 import nl.petrichor.app.data.weather.Coordinates
 import nl.petrichor.app.data.weather.Place
-import kotlin.math.round
 
 @Serializable
 data class LocationResult(
@@ -19,5 +18,3 @@ data class LocationResult(
         coordinates = Coordinates(coordinates.latitude, coordinates.longitude)
     )
 }
-
-private fun Double.round3(): Double = round(this * 1000.0) / 1000.0
