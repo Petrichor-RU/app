@@ -42,25 +42,32 @@ import io.github.ismoy.imagepickerkmp.config.GalleryConfig
 import io.github.ismoy.imagepickerkmp.extensions.loadPainter
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerKMPConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerResult
+import io.github.ismoy.imagepickerkmp.picker.PhotoResult
 import io.github.ismoy.imagepickerkmp.picker.rememberImagePickerKMP
 import kotlinx.coroutines.launch
 
 /**
  * Dialog for adding/editing clothing items
+ * @param clothing Existing clothing item for edit mode, null for add mode
  */
 @Composable
 fun AddClothingDialog(
+    clothing: ClothingPiece? = null,
     onDismiss: () -> Unit,
     onSave: (ClothingPiece) -> Unit
 ) {
-    var name by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf(ClothingType.T_SHIRT) }
-    var material by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
+    // Use existing clothing data or defaults for add mode
+    val isEditing = clothing != null
+    var name by remember { mutableStateOf(clothing?.name.orEmpty()) }
+    var selectedType by remember { mutableStateOf(clothing?.type ?: ClothingType.T_SHIRT) }
+    var material by remember { mutableStateOf(clothing?.material.orEmpty()) }
+    var notes by remember { mutableStateOf(clothing?.notes.orEmpty()) }
     var isSaving by remember { mutableStateOf(false) }
     var showTypeMenu by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
+    var useNewImage by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    
     val imagePicker = rememberImagePickerKMP(
         ImagePickerKMPConfig(
             galleryConfig = GalleryConfig(allowMultiple = false),
@@ -69,10 +76,17 @@ fun AddClothingDialog(
     )
     val selectedPhoto = (imagePicker.result as? ImagePickerResult.Success)?.first
 
+    // Determine current image
+    val currentImagePath = if (useNewImage && selectedPhoto != null) {
+        null // Will use the new image from picker
+    } else {
+        clothing?.imagePath
+    }
+
     MaterialSymbolsRenderingScope {
         AlertDialog(
             onDismissRequest = {  },
-            title = { Text("Add Clothing Item") },
+            title = { Text(if (isEditing) "Edit Clothing Item" else "Add Clothing Item") },
             text = {
                 Column(
                     modifier = Modifier
@@ -80,29 +94,49 @@ fun AddClothingDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Image preview
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(100.dp)
+                            .height(150.dp)
                             .background(Color.LightGray),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (selectedPhoto == null) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                MaterialSymbol(
-                                    iconName = MaterialSymbols.IMAGE,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Text("Add a clothing photo", color = Color.Gray)
+                        when {
+                            selectedPhoto != null && useNewImage -> {
+                                selectedPhoto.loadPainter()?.let { painter ->
+                                    Image(
+                                        painter = painter,
+                                        contentDescription = "New clothing photo",
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                }
                             }
-                        } else {
-                            selectedPhoto.loadPainter()?.let { painter ->
-                                Image(
-                                    painter = painter,
-                                    contentDescription = "Selected clothing photo",
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                            currentImagePath?.isNotEmpty() == true -> {
+                                val painter = PhotoResult(uri = currentImagePath).loadPainter()
+                                if (painter != null) {
+                                    Image(
+                                        painter = painter,
+                                        contentDescription = "Current clothing photo",
+                                        modifier = Modifier.fillMaxWidth()
+                                    )
+                                } else {
+                                    MaterialSymbol(
+                                        iconName = MaterialSymbols.IMAGE,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                }
+                            }
+                            else -> {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    MaterialSymbol(
+                                        iconName = MaterialSymbols.IMAGE,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp)
+                                    )
+                                    Text("Add a clothing photo", color = Color.Gray)
+                                }
                             }
                         }
                     }
@@ -112,13 +146,37 @@ fun AddClothingDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { imagePicker.launchGallery() },
+                            onClick = { 
+                                useNewImage = true
+                                imagePicker.launchGallery() 
+                            },
                             modifier = Modifier.weight(1f)
                         ) { Text("Gallery") }
                         Button(
-                            onClick = { imagePicker.launchCamera() },
+                            onClick = { 
+                                useNewImage = true
+                                imagePicker.launchCamera() 
+                            },
                             modifier = Modifier.weight(1f)
                         ) { Text("Camera") }
+                    }
+                    
+                    // Option to keep current image (only for editing existing items with images)
+                    if (isEditing && clothing.imagePath.isNotEmpty()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Keep current image")
+                            IconButton(
+                                onClick = { useNewImage = false }
+                            ) {
+                                MaterialSymbol(
+                                    iconName = if (useNewImage) MaterialSymbols.RADIO_BUTTON_UNCHECKED else MaterialSymbols.CHECK_CIRCLE,
+                                    contentDescription = "Keep current image"
+                                )
+                            }
+                        }
                     }
 
                     when (val result = imagePicker.result) {
@@ -205,11 +263,25 @@ fun AddClothingDialog(
                         saveError = null
                         coroutineScope.launch {
                             try {
-                                val imagePath = selectedPhoto?.let {
-                                    ClothingImageStorage.copyToPermanentStorage(it)
-                                }.orEmpty()
+                                val imagePath = when {
+                                    useNewImage && selectedPhoto != null -> {
+                                        ClothingImageStorage.copyToPermanentStorage(selectedPhoto)
+                                    }
+                                    isEditing && !useNewImage -> clothing.imagePath
+                                    else -> selectedPhoto?.let {
+                                        ClothingImageStorage.copyToPermanentStorage(it)
+                                    }.orEmpty()
+                                }
+                                
                                 onSave(
-                                    ClothingPiece(
+                                    (clothing ?: ClothingPiece(
+                                        name = null,
+                                        type = selectedType,
+                                        material = null,
+                                        notes = null,
+                                        imagePath = "",
+                                        thumbnailPath = ""
+                                    )).copy(
                                         name = name.ifEmpty { null },
                                         type = selectedType,
                                         material = material.ifEmpty { null },
@@ -230,7 +302,7 @@ fun AddClothingDialog(
                     if (isSaving) {
                         CircularProgressIndicator(Modifier.size(20.dp))
                     } else {
-                        Text("Save")
+                        Text(if (isEditing) "Save Changes" else "Save")
                     }
                 }
             },
