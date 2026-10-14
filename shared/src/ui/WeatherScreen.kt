@@ -1,29 +1,10 @@
 package nl.petrichor.app.ui
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -31,12 +12,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.catbit.material_symbols.MaterialSymbol
+import dev.catbit.material_symbols.MaterialSymbols
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.currentPlace
-import nl.petrichor.app.data.weather.Coordinates
+import nl.petrichor.app.data.location.LocationPickerController
 import nl.petrichor.app.data.weather.Place
 import nl.petrichor.app.data.weather.WeatherRepository
 import nl.petrichor.app.data.weather.WeatherSnapshot
@@ -63,61 +47,71 @@ private class WeatherController : ViewModel() {
     }
 }
 
-private val presetPlaces = listOf(
-    Place("Amsterdam", Coordinates(52.3676, 4.9041)),
-    Place("London", Coordinates(51.5072, -0.1276)),
-    Place("New York", Coordinates(40.7128, -74.0060)),
-    Place("Tokyo", Coordinates(35.6762, 139.6503)),
-)
-
 @Composable
 fun WeatherScreen(
     modifier: Modifier = Modifier,
 ) {
-    val controller = remember { WeatherController() }
+    val controller = viewModel { WeatherController() }
+    val locationController = viewModel { LocationPickerController() }
     val state by controller.state.collectAsStateWithLifecycle()
     var selectedPlace by remember { mutableStateOf<Place?>(null) }
-    var menuExpanded by remember { mutableStateOf(false) }
+    var pickerOpen by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        val location = currentPlace()
-        selectedPlace = location
-        controller.load(location)
+    LaunchedEffect(selectedPlace) {
+        val place = selectedPlace
+        if (place == null) {
+            selectedPlace = currentPlace()
+        } else {
+            controller.load(place)
+        }
+    }
+
+    fun select(place: Place?) {
+        selectedPlace = place
+        pickerOpen = false
     }
 
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 18.dp)) {
         Spacer(Modifier.height(16.dp))
         Column {
-            Text("Location", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton(onClick = { menuExpanded = true }) {
-                Text(selectedPlace?.name ?: "Finding your location...", style = MaterialTheme.typography.titleLarge)
-                Text("  v", color = MaterialTheme.colorScheme.primary)
-            }
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                presetPlaces.forEach { place ->
-                    DropdownMenuItem(text = { Text(place.name) }, onClick = {
-                        selectedPlace = place
-                        menuExpanded = false
-                        controller.load(place)
-                    })
-                }
-                DropdownMenuItem(text = { Text("Use current location") }, onClick = {
-                    val place = Place("Current location", Coordinates(52.3676, 4.9041))
-                    selectedPlace = place
-                    menuExpanded = false
-                    controller.load(place)
-                })
+            Text(
+                text = "Location",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            TextButton(onClick = { pickerOpen = !pickerOpen }) {
+                Text(
+                    text = selectedPlace?.name ?: "Finding your location...",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Spacer(Modifier.width(8.dp))
+                MaterialSymbol(
+                    iconName = if (pickerOpen) MaterialSymbols.KEYBOARD_ARROW_DOWN else MaterialSymbols.KEYBOARD_ARROW_UP,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
         }
-        val currentState = state
-        when (currentState) {
-            WeatherUiState.Loading -> Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(12.dp))
-                Text("Updating forecast...")
+        if (pickerOpen) {
+            LocationPicker(
+                onLocationSelected = ::select,
+                onCurrentLocationSelected = { select(null) },
+                controller = locationController
+            )
+        } else {
+            val currentState = state
+            when {
+                selectedPlace == null || currentState is WeatherUiState.Loading -> Column(
+                    Modifier.fillMaxWidth().padding(top = 56.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(12.dp))
+                    Text("Updating forecast...")
+                }
+                currentState is WeatherUiState.Error -> BoxMessage(currentState.message, Modifier.fillMaxWidth().padding(top = 28.dp))
+                currentState is WeatherUiState.Ready -> WeatherContent(currentState.weather)
             }
-            is WeatherUiState.Error -> BoxMessage(currentState.message, Modifier.fillMaxWidth().padding(top = 28.dp))
-            is WeatherUiState.Ready -> WeatherContent(currentState.weather)
         }
     }
 }
