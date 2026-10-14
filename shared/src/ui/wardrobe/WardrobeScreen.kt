@@ -23,6 +23,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,7 +38,9 @@ import androidx.lifecycle.viewModelScope
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import nl.petrichor.app.data.wardrobe.ClothingPiece
+import nl.petrichor.app.data.wardrobe.ClothingImageStorage
 import nl.petrichor.app.data.wardrobe.WardrobeRepository
 
 import nl.petrichor.app.ui.BoxMessage
@@ -50,31 +53,57 @@ class WardrobeViewModel : ViewModel() {
     private val repository = WardrobeRepository()
     val allClothing = repository.getAllClothing()
     val clothingTypes = repository.getClothingTypes()
-    
+
     private val _snackbarMessage = mutableStateOf<String?>(null)
     val snackbarMessage: String? get() = _snackbarMessage.value
-    
+
     fun showSnackbar(message: String) {
         _snackbarMessage.value = message
     }
-    
+
     fun clearSnackbar() {
         _snackbarMessage.value = null
     }
-    
-    fun addClothing(clothing: ClothingPiece) = viewModelScope.launch {
-        repository.addClothing(clothing)
-        showSnackbar("Clothing item added!")
+
+    suspend fun addClothing(clothing: ClothingPiece): Boolean {
+        return try {
+            repository.addClothing(clothing)
+            showSnackbar("Clothing item added!")
+            true
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            showSnackbar("Could not add clothing item: ${exception.message ?: "Unknown error"}")
+            false
+        }
     }
 
     fun deleteClothing(clothing: ClothingPiece) = viewModelScope.launch {
-        repository.deleteClothing(clothing)
-        showSnackbar("Clothing item deleted!")
+        try {
+            repository.deleteClothing(clothing)
+            ClothingImageStorage.deleteImage(clothing.imagePath)
+            showSnackbar("Clothing item deleted!")
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            showSnackbar("Could not delete clothing item: ${exception.message ?: "Unknown error"}")
+        }
     }
 
-    fun updateClothing(clothing: ClothingPiece) = viewModelScope.launch {
-        repository.updateClothing(clothing)
-        showSnackbar("Clothing item updated!")
+    suspend fun updateClothing(previous: ClothingPiece, clothing: ClothingPiece): Boolean {
+        return try {
+            repository.updateClothing(clothing)
+            if (previous.imagePath != clothing.imagePath) {
+                ClothingImageStorage.deleteImage(previous.imagePath)
+            }
+            showSnackbar("Clothing item updated!")
+            true
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            showSnackbar("Could not update clothing item: ${exception.message ?: "Unknown error"}")
+            false
+        }
     }
 }
 
@@ -82,6 +111,14 @@ class WardrobeViewModel : ViewModel() {
 fun WardrobeScreen(
     modifier: Modifier = Modifier
 ) {
+    if (LocalInspectionMode.current) {
+        BoxMessage(
+            message = "Wardrobe preview",
+            modifier = modifier.fillMaxSize()
+        )
+        return
+    }
+
     val viewModel = remember { WardrobeViewModel() }
     val allClothing by viewModel.allClothing.collectAsStateWithLifecycle(emptyList())
     val clothingTypes by viewModel.clothingTypes.collectAsStateWithLifecycle(emptyList())
@@ -222,8 +259,9 @@ fun WardrobeScreen(
                 clothingTypes = clothingTypes,
                 onDismiss = { showAddDialog = false },
                 onSave = { clothing ->
-                    viewModel.addClothing(clothing)
-                    showAddDialog = false
+                    if (viewModel.addClothing(clothing)) {
+                        showAddDialog = false
+                    }
                 }
             )
         }
@@ -232,12 +270,13 @@ fun WardrobeScreen(
             AddClothingDialog(
                 clothing = selectedClothing,
                 clothingTypes = clothingTypes,
-                onDismiss = { 
+                onDismiss = {
                     showEditDialog = false
                 },
                 onSave = { updatedClothing ->
-                    viewModel.updateClothing(updatedClothing)
-                    showEditDialog = false
+                    if (viewModel.updateClothing(selectedClothing, updatedClothing)) {
+                        showEditDialog = false
+                    }
                 }
             )
         }

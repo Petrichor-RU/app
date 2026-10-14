@@ -11,7 +11,9 @@ import java.io.File
  */
 actual object WardrobeDatabaseProvider {
     private val dbInstance: WardrobeDatabase by lazy {
-        val dbFile = File(System.getProperty("user.home"), ".petrichor/wardrobe-images" + File.separator + WardrobeDatabase.DATABASE_NAME)
+        val dbDirectory = File(System.getProperty("user.home"), ".petrichor/wardrobe")
+            .apply { check(mkdirs() || isDirectory) { "Could not create wardrobe database directory." } }
+        val dbFile = File(dbDirectory, WardrobeDatabase.DATABASE_NAME)
         Room.databaseBuilder<WardrobeDatabase>(
             name = dbFile.absolutePath,
         )
@@ -19,6 +21,6 @@ actual object WardrobeDatabaseProvider {
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()
     }
-    
+
     actual fun getDatabase(): WardrobeDatabase = dbInstance
 }

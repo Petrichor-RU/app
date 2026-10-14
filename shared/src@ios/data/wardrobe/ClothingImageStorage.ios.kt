@@ -31,6 +31,14 @@ internal actual fun saveClothingImage(photo: PhotoResult, extension: String): St
 }
 
 @OptIn(ExperimentalForeignApi::class)
+internal actual fun deleteClothingImage(path: String) {
+    val fileManager = NSFileManager.defaultManager
+    check(fileManager.removeItemAtPath(path, null) || !fileManager.fileExistsAtPath(path)) {
+        "Could not delete clothing image."
+    }
+}
+
+@OptIn(ExperimentalForeignApi::class)
 private fun documentDirectory(): String {
     val url = NSFileManager.defaultManager.URLForDirectory(
         directory = NSDocumentDirectory,

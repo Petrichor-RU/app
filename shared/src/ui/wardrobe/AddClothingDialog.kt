@@ -56,7 +56,7 @@ fun AddClothingDialog(
     clothing: ClothingPiece? = null,
     clothingTypes: List<ClothingType>,
     onDismiss: () -> Unit,
-    onSave: (ClothingPiece) -> Unit
+    onSave: suspend (ClothingPiece) -> Unit
 ) {
     // Use existing clothing data; a type must be selected for new items.
     val isEditing = clothing != null

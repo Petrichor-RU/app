@@ -11,3 +11,9 @@ internal actual fun saveClothingImage(photo: PhotoResult, extension: String): St
     file.writeBytes(photo.loadBytes())
     return file.absolutePath
 }
+
+internal actual fun deleteClothingImage(path: String) {
+    check(File(path).delete() || !File(path).exists()) {
+        "Could not delete clothing image."
+    }
+}

@@ -15,6 +15,13 @@ object ClothingImageStorage {
             ?: "jpg"
         saveClothingImage(photo, extension)
     }
+
+    suspend fun deleteImage(path: String) = withContext(Dispatchers.Default) {
+        if (path.isNotEmpty()) {
+            deleteClothingImage(path)
+        }
+    }
 }
 
 internal expect fun saveClothingImage(photo: PhotoResult, extension: String): String
+internal expect fun deleteClothingImage(path: String)

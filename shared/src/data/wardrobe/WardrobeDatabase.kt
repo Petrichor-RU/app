@@ -15,7 +15,7 @@ import androidx.room.TypeConverters
 )
 @TypeConverters(WardrobeConverters::class)
 abstract class WardrobeDatabase : RoomDatabase() {
-    
+
     abstract fun clothingDao(): ClothingDao
 
     companion object {

@@ -23,7 +23,7 @@ actual object WardrobeDatabaseProvider {
         .setQueryCoroutineContext(Dispatchers.IO)
         .build()
     }
-    
+
     actual fun getDatabase(): WardrobeDatabase = dbInstance
 }
 

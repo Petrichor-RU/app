@@ -13,11 +13,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        
+
         // Initialize Room database
         WardrobeDatabaseProvider.init(this)
         initClothingImageStorage(this)
-        
+
         setContent {
             App()
         }

@@ -11,7 +11,7 @@ import kotlinx.coroutines.Dispatchers
  */
 actual object WardrobeDatabaseProvider {
     private var dbInstance: WardrobeDatabase? = null
-    
+
     // This will be set by the Android app during initialization
     fun init(context: Context) {
         if (dbInstance == null) {
@@ -24,7 +24,7 @@ actual object WardrobeDatabaseProvider {
             .build()
         }
     }
-    
+
     actual fun getDatabase(): WardrobeDatabase {
         return dbInstance ?: throw IllegalStateException("WardrobeDatabase not initialized. Call WardrobeDatabaseProvider.init(context) first.")
     }
