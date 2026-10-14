@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.wardrobe
 
 import androidx.room.Room
+import androidx.room.RoomDatabaseConstructor
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.coroutines.Dispatchers
@@ -13,16 +14,20 @@ import platform.Foundation.NSUserDomainMask
  * iOS implementation of WardrobeDatabaseProvider
  * Following Room KMP guide: https://developer.android.com/kotlin/multiplatform/room
  */
-actual object WardrobeDatabaseProvider {
-    private val dbInstance: WardrobeDatabase by lazy {
+actual object WardrobeDatabaseConstructor : RoomDatabaseConstructor<WardrobeDatabase> {
+    actual override fun initialize(): WardrobeDatabase {
         val dbFilePath = documentDirectory() + "/" + WardrobeDatabase.DATABASE_NAME
-        Room.databaseBuilder<WardrobeDatabase>(
+        return Room.databaseBuilder<WardrobeDatabase>(
             name = dbFilePath,
         )
-        .setDriver(BundledSQLiteDriver())
-        .setQueryCoroutineContext(Dispatchers.IO)
-        .build()
+            .setDriver(BundledSQLiteDriver())
+            .setQueryCoroutineContext(Dispatchers.IO)
+            .build()
     }
+}
+
+actual object WardrobeDatabaseProvider {
+    private val dbInstance: WardrobeDatabase by lazy(WardrobeDatabaseConstructor::initialize)
 
     actual fun getDatabase(): WardrobeDatabase = dbInstance
 }
