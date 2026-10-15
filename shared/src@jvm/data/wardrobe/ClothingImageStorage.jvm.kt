@@ -18,4 +18,4 @@ internal actual fun deleteClothingImage(path: String) {
     }
 }
 
-internal actual fun imageUriForLoading(path: String): String = path
+internal actual fun imageUriForLoading(path: String): String = File(path).toURI().toString()
