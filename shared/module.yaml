@@ -32,6 +32,8 @@ dependencies@ios:
 
 dependencies@jvm:
   - $libs.ktor.client.cio
+  - $compose.uiTest
+  - $libs.skiko.awt.runtime.linux.x64
 
 
 settings:
