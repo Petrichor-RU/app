@@ -129,6 +129,7 @@ fun WardrobeScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedClothingId by rememberSaveable { mutableStateOf<Long?>(null) }
     val selectedClothing = allClothing.firstOrNull { it.id == selectedClothingId }
+    var closingClothing by remember { mutableStateOf<ClothingPiece?>(null) }
     var showDetailDialog by rememberSaveable { mutableStateOf(false) }
     var animateDetail by rememberSaveable { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -151,6 +152,7 @@ fun WardrobeScreen(
             animateDetail = false
         } else if (!showDetailDialog) {
             selectedClothingId = null
+            closingClothing = null
         }
     }
     // Show snackbar messages
@@ -242,7 +244,7 @@ fun WardrobeScreen(
             }
         }
 
-        selectedClothing?.let { clothing ->
+        (selectedClothing ?: closingClothing)?.let { clothing ->
             clothingTypes.firstOrNull { it.id == clothing.typeId }?.let { clothingType ->
                 AnimatedVisibility(
                     visibleState = detailTransition,
@@ -263,9 +265,9 @@ fun WardrobeScreen(
                         onDismiss = { showDetailDialog = false },
                         onEdit = { showEditDialog = true },
                         onDelete = { deletedClothing ->
+                            closingClothing = deletedClothing
                             viewModel.deleteClothing(deletedClothing)
                             showDetailDialog = false
-                            selectedClothingId = null
                         }
                     )
                 }
