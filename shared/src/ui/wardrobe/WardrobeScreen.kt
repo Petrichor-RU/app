@@ -130,13 +130,29 @@ fun WardrobeScreen(
     var selectedClothingId by rememberSaveable { mutableStateOf<Long?>(null) }
     val selectedClothing = allClothing.firstOrNull { it.id == selectedClothingId }
     var showDetailDialog by rememberSaveable { mutableStateOf(false) }
-    var animateDetail by remember { mutableStateOf(false) }
+    var animateDetail by rememberSaveable { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val detailTransition = remember(selectedClothingId) {
         MutableTransitionState(!animateDetail)
     }
     detailTransition.targetState = showDetailDialog && selectedClothing != null
+    LaunchedEffect(
+        detailTransition.currentState,
+        detailTransition.isIdle,
+        selectedClothingId,
+        showDetailDialog
+    ) {
+        if (!detailTransition.isIdle || selectedClothingId == null) {
+            return@LaunchedEffect
+        }
+
+        if (detailTransition.currentState) {
+            animateDetail = false
+        } else if (!showDetailDialog) {
+            selectedClothingId = null
+        }
+    }
     // Show snackbar messages
     viewModel.snackbarMessage?.let { message ->
         LaunchedEffect(message) {
@@ -243,7 +259,7 @@ fun WardrobeScreen(
                     ClothingDetailScreen(
                         clothing = clothing,
                         clothingType = clothingType,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().statusBarsPadding(),
                         onDismiss = { showDetailDialog = false },
                         onEdit = { showEditDialog = true },
                         onDelete = { deletedClothing ->
