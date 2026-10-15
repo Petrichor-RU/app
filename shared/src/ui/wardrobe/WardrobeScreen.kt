@@ -9,14 +9,14 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material3.Scaffold
@@ -168,63 +168,55 @@ fun WardrobeScreen(
                 }
             }
         ) { paddingValues ->
-            Column(
+            val filteredClothing = if (selectedTypeId == null) {
+                allClothing
+            } else {
+                allClothing.filter { it.typeId == selectedTypeId }
+            }
+
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Filter bar
-                WardrobeFilterBar(
-                    clothingTypes = clothingTypes,
-                    onTypeSelected = { typeId ->
-                        selectedTypeId = typeId
-                    }
-                )
-
-                // Clothing grid
-                if (allClothing.isEmpty()) {
-                    BoxMessage(
-                        message = "Your wardrobe is empty. Add your first clothing item!",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    WardrobeFilterBar(
+                        clothingTypes = clothingTypes,
+                        onTypeSelected = { typeId ->
+                            selectedTypeId = typeId
+                        }
                     )
-                } else {
-                    val filteredClothing = if (selectedTypeId == null) {
-                        allClothing
-                    } else {
-                        allClothing.filter { it.typeId == selectedTypeId }
-                    }
+                }
 
-                    if (filteredClothing.isEmpty()) {
+                if (allClothing.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        BoxMessage(
+                            message = "Your wardrobe is empty. Add your first clothing item!",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                } else if (filteredClothing.isEmpty()) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
                         BoxMessage(
                             message = "No items found for this type.",
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    } else {
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .weight(1f),
-                            contentPadding = PaddingValues(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(filteredClothing) { clothing ->
-                                ClothingCard(
-                                    clothing = clothing,
-                                    onClick = {
-                                        selectedClothingId = clothing.id
-                                        animateDetail = true
-                                        showDetailDialog = true
-                                    },
-                                    modifier = Modifier.aspectRatio(1f)
-                                )
-                            }
-                        }
+                    }
+                } else {
+                    items(filteredClothing) { clothing ->
+                        ClothingCard(
+                            clothing = clothing,
+                            onClick = {
+                                selectedClothingId = clothing.id
+                                animateDetail = true
+                                showDetailDialog = true
+                            },
+                            modifier = Modifier.aspectRatio(1f)
+                        )
                     }
                 }
             }
