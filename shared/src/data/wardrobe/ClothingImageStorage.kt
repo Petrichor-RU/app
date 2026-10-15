@@ -25,3 +25,4 @@ object ClothingImageStorage {
 
 internal expect fun saveClothingImage(photo: PhotoResult, extension: String): String
 internal expect fun deleteClothingImage(path: String)
+internal expect fun imageUriForLoading(path: String): String

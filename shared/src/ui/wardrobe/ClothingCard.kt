@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
 import nl.petrichor.app.data.wardrobe.ClothingPiece
+import nl.petrichor.app.data.wardrobe.imageUriForLoading
 import io.github.ismoy.imagepickerkmp.extensions.loadPainter
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
 
@@ -40,7 +41,7 @@ fun ClothingCard(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             val painter = if (clothing.imagePath.isNotEmpty()) {
-                PhotoResult(uri = clothing.imagePath).loadPainter()
+                PhotoResult(uri = imageUriForLoading(clothing.imagePath)).loadPainter()
             } else {
                 null
             }

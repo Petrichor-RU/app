@@ -17,3 +17,5 @@ internal actual fun deleteClothingImage(path: String) {
         "Could not delete clothing image."
     }
 }
+
+internal actual fun imageUriForLoading(path: String): String = path

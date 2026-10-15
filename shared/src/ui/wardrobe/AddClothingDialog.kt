@@ -38,6 +38,8 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingImageStorage
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
+import nl.petrichor.app.data.wardrobe.imageUriForLoading
+import nl.petrichor.app.platform.isCameraAvailable
 import io.github.ismoy.imagepickerkmp.config.CropConfig
 import io.github.ismoy.imagepickerkmp.config.GalleryConfig
 import io.github.ismoy.imagepickerkmp.extensions.loadPainter
@@ -117,7 +119,9 @@ fun AddClothingDialog(
                                 }
                             }
                             currentImagePath?.isNotEmpty() == true -> {
-                                val painter = currentImagePath.let { PhotoResult(uri = it).loadPainter() }
+                                val painter = currentImagePath.let {
+                                    PhotoResult(uri = imageUriForLoading(it)).loadPainter()
+                                }
                                 if (painter != null) {
                                     Image(
                                         painter = painter,
@@ -161,6 +165,7 @@ fun AddClothingDialog(
                                 useNewImage = true
                                 imagePicker.launchCamera()
                             },
+                            enabled = isCameraAvailable(),
                             modifier = Modifier.weight(1f)
                         ) { Text("Camera") }
                     }
