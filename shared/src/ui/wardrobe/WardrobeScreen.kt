@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -152,25 +153,26 @@ fun WardrobeScreen(
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        floatingActionButton = {
-            if (!showDetailDialog) {
-                FloatingActionButton(
-                    onClick = { showAddDialog = true }
-                ) {
-                    MaterialSymbol(
-                        iconName = MaterialSymbols.ADD,
-                        contentDescription = "Add clothing"
-                    )
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            floatingActionButton = {
+                if (!showDetailDialog) {
+                    FloatingActionButton(
+                        onClick = { showAddDialog = true }
+                    ) {
+                        MaterialSymbol(
+                            iconName = MaterialSymbols.ADD,
+                            contentDescription = "Add clothing"
+                        )
+                    }
                 }
             }
-        }
-    ) { paddingValues ->
-        Column(
+        ) { paddingValues ->
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
-        ) {
+            ) {
                 // Filter bar
                 WardrobeFilterBar(
                     clothingTypes = clothingTypes,
@@ -183,7 +185,9 @@ fun WardrobeScreen(
                 if (allClothing.isEmpty()) {
                     BoxMessage(
                         message = "Your wardrobe is empty. Add your first clothing item!",
-                        modifier = Modifier.fillMaxWidth().weight(1f)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
                     )
                 } else {
                     val filteredClothing = if (selectedTypeId == null) {
@@ -195,12 +199,16 @@ fun WardrobeScreen(
                     if (filteredClothing.isEmpty()) {
                         BoxMessage(
                             message = "No items found for this type.",
-                            modifier = Modifier.fillMaxWidth().weight(1f)
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
                         )
                     } else {
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxSize().weight(1f),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .weight(1f),
                             contentPadding = PaddingValues(8.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
