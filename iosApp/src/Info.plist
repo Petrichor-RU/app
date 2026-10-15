@@ -22,6 +22,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Allow Petrichor to show the weather for your current location.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow Petrichor to capture clothing photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow Petrichor to select clothing photos.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>
