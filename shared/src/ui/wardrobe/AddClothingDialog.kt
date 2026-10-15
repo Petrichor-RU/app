@@ -40,6 +40,7 @@ import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
 import nl.petrichor.app.data.wardrobe.imageUriForLoading
 import nl.petrichor.app.platform.isCameraAvailable
+import nl.petrichor.app.platform.isImageCropAvailable
 import io.github.ismoy.imagepickerkmp.config.CropConfig
 import io.github.ismoy.imagepickerkmp.config.GalleryConfig
 import io.github.ismoy.imagepickerkmp.extensions.loadPainter
@@ -78,7 +79,11 @@ fun AddClothingDialog(
     val imagePicker = rememberImagePickerKMP(
         ImagePickerKMPConfig(
             galleryConfig = GalleryConfig(allowMultiple = false),
-            cropConfig = CropConfig(enabled = true, squareCrop = true, circularCrop = false)
+            cropConfig = CropConfig(
+                enabled = isImageCropAvailable,
+                squareCrop = true,
+                circularCrop = false
+            )
         )
     )
     val selectedPhoto = (imagePicker.result as? ImagePickerResult.Success)?.first
