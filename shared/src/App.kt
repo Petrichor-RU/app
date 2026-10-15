@@ -2,6 +2,8 @@ package nl.petrichor.app
 
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
@@ -34,9 +36,9 @@ fun App() {
         MaterialTheme {
             Scaffold(
                 containerColor = Color(0xFFF6F8FC),
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 bottomBar = {
-                    NavigationBar(
-                    ) {
+                    NavigationBar {
                         // Wardrobe tab at position 0
                         NavigationBarItem(selected = selectedTab == 0, onClick = {
                             coroutineScope.launch { pagerState.animateScrollToPage(0) }
@@ -81,8 +83,11 @@ fun App() {
                 ) { page ->
                     when (page) {
                         0 -> WardrobeScreen()
-                        3 -> WeatherScreen()
-                        else -> BoxMessage("This tab is coming soon.")
+                        3 -> WeatherScreen(modifier = Modifier.statusBarsPadding())
+                        else -> BoxMessage(
+                            "This tab is coming soon.",
+                            modifier = Modifier.statusBarsPadding()
+                        )
                     }
                 }
             }

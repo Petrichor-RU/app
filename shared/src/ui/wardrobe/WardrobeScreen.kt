@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -31,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
@@ -153,6 +155,7 @@ fun WardrobeScreen(
 
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             snackbarHost = { SnackbarHost(snackbarHostState) },
             floatingActionButton = {
@@ -188,7 +191,8 @@ fun WardrobeScreen(
                         clothingTypes = clothingTypes,
                         onTypeSelected = { typeId ->
                             selectedTypeId = typeId
-                        }
+                        },
+                        modifier = Modifier.statusBarsPadding()
                     )
                 }
 
