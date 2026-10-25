@@ -21,9 +21,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import nl.petrichor.app.data.location.LocationPickerController
 import nl.petrichor.app.data.location.LocationResult
-import nl.petrichor.app.data.location.LocationSearchState
 import nl.petrichor.app.data.weather.Place
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyListState

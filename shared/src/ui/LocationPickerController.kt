@@ -1,4 +1,4 @@
-package nl.petrichor.app.data.location
+package nl.petrichor.app.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import nl.petrichor.app.data.location.LocationResult
+import nl.petrichor.app.data.location.LocationSearchRepository
+import nl.petrichor.app.data.location.SavedLocationsRepository
 import kotlin.time.Duration.Companion.milliseconds
 
 private val searchDebounce = 350.milliseconds

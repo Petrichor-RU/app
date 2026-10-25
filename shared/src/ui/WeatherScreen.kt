@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.currentPlace
-import nl.petrichor.app.data.location.LocationPickerController
 import nl.petrichor.app.data.weather.Place
 import nl.petrichor.app.data.weather.WeatherRepository
 import nl.petrichor.app.data.weather.WeatherSnapshot
