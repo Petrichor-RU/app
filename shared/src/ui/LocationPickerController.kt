@@ -70,7 +70,6 @@ class LocationPickerController(
 
     fun add(location: LocationResult) {
         viewModelScope.launch { savedRepository.add(location) }
-        search("")
     }
 
     fun remove(location: LocationResult) {

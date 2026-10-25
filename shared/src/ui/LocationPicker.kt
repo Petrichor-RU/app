@@ -74,7 +74,11 @@ fun LocationPicker(
                         title = "Use current location",
                         icon = MaterialSymbols.MY_LOCATION,
                         iconTint = MaterialTheme.colorScheme.primary,
-                        onClick = onCurrentLocationSelected
+                        onClick = onCurrentLocationSelected,
+                        modifier = Modifier
+                            .padding(vertical = 2.dp, horizontal = 8.dp)
+                            .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp))
+                            .clip(RoundedCornerShape(12.dp))
                     )
                 }
 
@@ -88,7 +92,12 @@ fun LocationPicker(
                 searchResults(
                     search = state.search,
                     savedKeys = savedKeys,
-                    onAdd = controller::add
+                    onSelect = { location ->
+                        controller.search("")
+                        onLocationSelected(location.toPlace())
+                    },
+                    onAdd = controller::add,
+                    onRemove = controller::remove,
                 )
             }
         }
@@ -138,7 +147,9 @@ private fun LazyListScope.savedLocations(
 private fun LazyListScope.searchResults(
     search: LocationSearchState,
     savedKeys: Set<String>,
+    onSelect: (LocationResult) -> Unit,
     onAdd: (LocationResult) -> Unit,
+    onRemove: (LocationResult) -> Unit,
 ) {
     when (search) {
         LocationSearchState.Idle -> Unit
@@ -159,18 +170,20 @@ private fun LazyListScope.searchResults(
 
                 LocationListItem(
                     location = location,
-                    icon = if (isSaved) MaterialSymbols.CHECK else MaterialSymbols.LOCATION_ON,
+                    icon = MaterialSymbols.LOCATION_ON,
                     iconTint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    onClick = if (isSaved) null else { { onAdd(location) } },
+                    onClick = { onSelect(location) },
                     trailingAction = {
-                        if (!isSaved) {
-                            IconButton(onClick = { onAdd(location) }) {
-                                MaterialSymbol(
-                                    iconName = MaterialSymbols.ADD,
-                                    contentDescription = "Save ${location.name}",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
+                        IconButton(
+                            onClick = {
+                                if (isSaved) onRemove(location) else onAdd(location)
                             }
+                        ) {
+                            MaterialSymbol(
+                                iconName = if (isSaved) MaterialSymbols.CHECK else MaterialSymbols.ADD,
+                                contentDescription = if (isSaved) "Remove ${location.name} from saved" else "Save ${location.name}",
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
                         }
                     }
                 )

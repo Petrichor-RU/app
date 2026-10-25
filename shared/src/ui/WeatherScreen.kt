@@ -68,29 +68,22 @@ fun WeatherScreen(
     fun select(place: Place?) {
         selectedPlace = place
         pickerOpen = false
+        locationController.search("")
     }
 
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 18.dp)) {
         Spacer(Modifier.height(16.dp))
-        Column {
-            Text(
-                text = "Location",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            TextButton(onClick = { pickerOpen = !pickerOpen }) {
-                Text(
-                    text = selectedPlace?.name ?: "Finding your location...",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Spacer(Modifier.width(8.dp))
-                MaterialSymbol(
-                    iconName = if (pickerOpen) MaterialSymbols.KEYBOARD_ARROW_DOWN else MaterialSymbols.KEYBOARD_ARROW_UP,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary
-                )
+        LocationHeader(
+            locationName = selectedPlace?.name ?: "Finding your location...",
+            pickerOpen = pickerOpen,
+            onTogglePicker = {
+                pickerOpen = !pickerOpen
+                if (!pickerOpen) {
+                    locationController.search("")
+                }
             }
-        }
+        )
+        Spacer(Modifier.height(16.dp))
         if (pickerOpen) {
             LocationPicker(
                 onLocationSelected = ::select,
@@ -111,6 +104,49 @@ fun WeatherScreen(
                 currentState is WeatherUiState.Error -> BoxMessage(currentState.message, Modifier.fillMaxWidth().padding(top = 28.dp))
                 currentState is WeatherUiState.Ready -> WeatherContent(currentState.weather)
             }
+        }
+    }
+}
+
+@Composable
+private fun LocationHeader(
+    locationName: String,
+    pickerOpen: Boolean,
+    onTogglePicker: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = "Location",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                MaterialSymbol(
+                    iconName = MaterialSymbols.LOCATION_ON,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    text = locationName,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        FilledTonalIconButton(onClick = onTogglePicker) {
+            MaterialSymbol(
+                iconName = if (pickerOpen) MaterialSymbols.CLOSE else MaterialSymbols.SEARCH,
+                contentDescription = if (pickerOpen) "Close location picker" else "Search locations",
+            )
         }
     }
 }
