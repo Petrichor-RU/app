@@ -27,7 +27,7 @@ class LocationSearchRepository(
 ) {
     suspend fun search(query: String): Result<List<LocationResult>> = runCatching {
         require(apiKey.isNotBlank()) { "Add your OpenWeather API key to AppConfig.OpenWeatherApiKey." }
-        val response = client.get("${AppConfig.OPENWEATHER_API_GEOCODING_BASE}/geo/1.0/direct") {
+        val response = client.get("${AppConfig.OPENWEATHER_API_BASE}/geo/1.0/direct") {
             parameter("q", query)
             parameter("limit", 5)
             parameter("appid", apiKey)
