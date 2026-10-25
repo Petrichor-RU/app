@@ -13,9 +13,10 @@ dependencies:
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
   - $libs.ktor.client.core
-  - $libs.kotlinx.serialization.json
   - $libs.compass.geolocation
   - $libs.material.symbols
+  - $libs.androidx.datastore.preferences.core
+  - $libs.calvin.reorderable
 
 dependencies@android:
   - $compose.uiTooling
@@ -33,6 +34,8 @@ dependencies@wasmJs:
   - $libs.compass.geolocation.browser
 
 settings:
+  kotlin:
+    serialization: json
   compose:
     enabled: true
     resources:
