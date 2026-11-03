@@ -13,9 +13,10 @@ dependencies:
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
   - $libs.ktor.client.core
-  - $libs.kotlinx.serialization.json
   - $libs.compass.geolocation
   - $libs.material.symbols
+  - $libs.androidx.datastore.preferences.core
+  - $libs.calvin.reorderable
   - $libs.androidx.room.runtime
   - $libs.sqlite.bundled
   - $libs.imagepickerkmp
@@ -37,6 +38,8 @@ dependencies@jvm:
 
 
 settings:
+  kotlin:
+    serialization: json
   compose:
     enabled: true
     resources:
