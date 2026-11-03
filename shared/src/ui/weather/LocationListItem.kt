@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -46,6 +47,7 @@ fun LocationListItem(
     trailingAction: @Composable (() -> Unit)? = null,
 ) {
     val colors = MaterialTheme.colorScheme
+    val cardColors = CardDefaults.cardColors()
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
 
@@ -59,12 +61,12 @@ fun LocationListItem(
         label = "location_item_scale",
     )
     val containerColor by animateColorAsState(
-        targetValue = if (highlighted) colors.primaryContainer else colors.surface,
+        targetValue = if (highlighted) colors.primaryContainer else cardColors.containerColor,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "location_item_container",
     )
     val contentColor by animateColorAsState(
-        targetValue = if (highlighted) colors.onPrimaryContainer else colors.onSurface,
+        targetValue = if (highlighted) colors.onPrimaryContainer else cardColors.contentColor,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "location_item_content",
     )

@@ -1,14 +1,15 @@
 package nl.petrichor.app.ui.weather
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -116,27 +117,28 @@ fun WeatherScreen(
             }
         )
         Spacer(Modifier.height(16.dp))
-        AnimatedContent(
-            targetState = pickerOpen,
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.TopCenter,
-            transitionSpec = {
-                val direction = if (targetState) -1 else 1
-                (fadeIn(tween(durationMillis = 220, delayMillis = 60)) +
-                    slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { height -> direction * height / 12 })
-                    .togetherWith(fadeOut(tween(durationMillis = 100)))
-                    .using(SizeTransform(clip = false))
-            },
-            label = "picker_transition",
-        ) { open ->
-            if (open) {
+        Box(Modifier.fillMaxSize()) {
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !pickerOpen,
+                enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) +
+                    slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { height -> height / 10 },
+                exit = fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
+                    slideOutVertically(spring(stiffness = Spring.StiffnessMediumLow)) { height -> height / 10 },
+            ) {
+                ForecastBody(state.forecast)
+            }
+            androidx.compose.animation.AnimatedVisibility(
+                visible = pickerOpen,
+                enter = fadeIn(spring(stiffness = Spring.StiffnessMedium)) +
+                    slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { height -> -height / 10 },
+                exit = fadeOut(spring(stiffness = Spring.StiffnessMedium)) +
+                    slideOutVertically(spring(stiffness = Spring.StiffnessMediumLow)) { height -> -height / 10 },
+            ) {
                 LocationPicker(
                     onLocationSelected = ::select,
                     onCurrentLocationSelected = { select(null) },
                     viewModel = pickerViewModel
                 )
-            } else {
-                ForecastBody(state.forecast)
             }
         }
     }
