@@ -1,3 +1,3 @@
 package nl.petrichor.app.platform
 
-actual val isImageCropAvailable: Boolean = true
+actual val isImageCropAvailable: Boolean = false
