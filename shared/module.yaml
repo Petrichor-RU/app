@@ -13,6 +13,7 @@ dependencies:
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
   - $libs.ktor.client.core
+  - $libs.kotlinx.datetime
   - $libs.compass.geolocation
   - $libs.material.symbols
   - $libs.androidx.datastore.preferences.core
@@ -39,6 +40,9 @@ dependencies@jvm:
 
 settings:
   kotlin:
+    ksp:
+      processors:
+        - $libs.androidx.room.compiler
     serialization: json
   compose:
     enabled: true
@@ -46,7 +50,3 @@ settings:
       packageName: nl.petrichor.app.resources
       # Generate public accessors so other modules (and previews) can use Res.*
       exposedAccessors: true
-  kotlin:
-    ksp:
-      processors:
-        - $libs.androidx.room.compiler

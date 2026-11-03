@@ -19,12 +19,12 @@ class RecommendationCalendarTest {
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `calendar shows the month of the selected day and marks it as selected`() = runDesktopComposeUiTest {
+    fun `calendar shows the week of the selected day by default and marks it as selected`() = runDesktopComposeUiTest {
         setContent {
             MaterialSymbolsRenderingScope {
                 MaterialTheme {
                     RecommendationCalendar(
-                        selectedDate = LocalDate(2026, 11, 12),
+                        selectedDate = LocalDate(2026, 11, 5),
                         today = today,
                         onDateSelected = {}
                     )
@@ -33,7 +33,7 @@ class RecommendationCalendarTest {
         }
 
         onNodeWithText("November 2026").assertIsDisplayed()
-        onNodeWithText("12").assertIsSelected()
+        onNodeWithText("5").assertIsSelected()
         onNodeWithText("3").assertIsNotSelected()
     }
 
@@ -53,14 +53,14 @@ class RecommendationCalendarTest {
             }
         }
 
-        onNodeWithText("15").performClick()
+        onNodeWithText("7").performClick()
 
-        assertEquals(LocalDate(2026, 11, 15), selectedDate)
+        assertEquals(LocalDate(2026, 11, 7), selectedDate)
     }
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `month navigation changes the displayed month and today jumps back`() = runDesktopComposeUiTest {
+    fun `expanding to full month shows the month grid and navigates between months`() = runDesktopComposeUiTest {
         var selectedDate: LocalDate? = null
         setContent {
             MaterialSymbolsRenderingScope {
@@ -73,6 +73,9 @@ class RecommendationCalendarTest {
                 }
             }
         }
+
+        onNodeWithContentDescription("Show full month").performClick()
+        onNodeWithText("15").assertIsDisplayed()
 
         onNodeWithContentDescription("Next month").performClick()
         onNodeWithText("December 2026").assertIsDisplayed()

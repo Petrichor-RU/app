@@ -13,6 +13,7 @@ ksp = "2.1.10-1.0.29"
 sqlite = "2.7.1"
 imagepickerkmp = "1.1.7"
 skiko = "0.150.1"
+kotlinx-datetime = "0.8.0"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
@@ -22,6 +23,7 @@ androidx-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycl
 androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 calvin-reorderable = { module = "sh.calvin.reorderable:reorderable", version.ref = "reorderable" }
 kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-swing", version.ref = "kotlinx-coroutines" }
+kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
