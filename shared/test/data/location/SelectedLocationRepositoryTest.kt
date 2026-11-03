@@ -32,7 +32,7 @@ class SelectedLocationRepositoryTest {
     fun `a selected place is persisted and read back`() = runBlocking {
         val dataStore = FakePreferencesDataStore()
         SelectedLocationRepository(dataStore).select(utrecht)
-        
+
         assertEquals(utrecht, SelectedLocationRepository(dataStore).selected.first())
     }
 

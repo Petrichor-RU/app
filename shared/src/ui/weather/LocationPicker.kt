@@ -1,20 +1,29 @@
-package nl.petrichor.app.ui
+package nl.petrichor.app.ui.weather
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.hapticfeedback.HapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,6 +32,7 @@ import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
 import nl.petrichor.app.data.location.LocationResult
 import nl.petrichor.app.data.weather.Place
+import nl.petrichor.app.ui.BoxMessage
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.ReorderableLazyListState
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -32,28 +42,28 @@ fun LocationPicker(
     onLocationSelected: (Place) -> Unit,
     onCurrentLocationSelected: () -> Unit,
     modifier: Modifier = Modifier,
-    controller: LocationPickerController = viewModel { LocationPickerController() },
+    viewModel: LocationPickerViewModel = viewModel { LocationPickerViewModel() },
 ) {
-    val state by controller.state.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     val savedKeys = remember(state.saved) { state.saved.mapTo(HashSet()) { it.key } }
+    val haptics = LocalHapticFeedback.current
 
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        val fromIndex = state.saved.indexOfFirst { it.key == from.key }
-        val toIndex = state.saved.indexOfFirst { it.key == to.key }
-        controller.move(fromIndex, toIndex)
+        viewModel.move(from.key, to.key)
+        haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
     }
 
     Column(modifier.fillMaxSize()) {
         OutlinedTextField(
             value = state.query,
-            onValueChange = controller::search,
+            onValueChange = viewModel::search,
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search for a city or area") },
             leadingIcon = { MaterialSymbol(iconName = MaterialSymbols.SEARCH, contentDescription = null) },
             trailingIcon = {
                 if (state.query.isNotEmpty()) {
-                    IconButton(onClick = { controller.search("") }) {
+                    IconButton(onClick = { viewModel.search("") }) {
                         MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Clear search")
                     }
                 }
@@ -69,35 +79,34 @@ fun LocationPicker(
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
             if (state.query.isBlank()) {
-                item {
-                    ListItemRow(
+                item(key = "current-location") {
+                    LocationListItem(
                         title = "Use current location",
                         icon = MaterialSymbols.MY_LOCATION,
                         iconTint = MaterialTheme.colorScheme.primary,
                         onClick = onCurrentLocationSelected,
-                        modifier = Modifier
-                            .padding(vertical = 2.dp, horizontal = 8.dp)
-                            .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp))
-                            .clip(RoundedCornerShape(12.dp))
+                        modifier = Modifier.animateItem(),
                     )
                 }
 
                 savedLocations(
                     saved = state.saved,
                     reorderState = reorderState,
-                    controller = controller,
-                    onLocationSelected = onLocationSelected
+                    haptics = haptics,
+                    onSelect = { location -> onLocationSelected(location.toPlace()) },
+                    onRemove = viewModel::remove,
+                    onDragStopped = viewModel::commitOrder,
                 )
             } else {
                 searchResults(
                     search = state.search,
                     savedKeys = savedKeys,
                     onSelect = { location ->
-                        controller.search("")
+                        viewModel.search("")
                         onLocationSelected(location.toPlace())
                     },
-                    onAdd = controller::add,
-                    onRemove = controller::remove,
+                    onAdd = viewModel::add,
+                    onRemove = viewModel::remove,
                 )
             }
         }
@@ -107,36 +116,45 @@ fun LocationPicker(
 private fun LazyListScope.savedLocations(
     saved: List<LocationResult>,
     reorderState: ReorderableLazyListState,
-    controller: LocationPickerController,
-    onLocationSelected: (Place) -> Unit
+    haptics: HapticFeedback,
+    onSelect: (LocationResult) -> Unit,
+    onRemove: (LocationResult) -> Unit,
+    onDragStopped: () -> Unit,
 ) {
-    item {
+    item(key = "saved-header") {
         Text(
             text = "Saved locations",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
+            modifier = Modifier
+                .animateItem()
+                .padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
         )
     }
 
     if (saved.isEmpty()) {
-        item { BoxMessage("Search for a city above to save it here.") }
+        item(key = "saved-empty") {
+            BoxMessage("Search for a city above to save it here.", Modifier.animateItem())
+        }
     }
 
     items(saved, key = { it.key }) { location ->
         ReorderableItem(reorderState, key = location.key) { isDragging ->
-            val elevation by animateFloatAsState(if (isDragging) 8f else 0f, label = "drag_elevation")
-
             LocationListItem(
-                location = location,
-                elevation = elevation,
-                onClick = { onLocationSelected(location.toPlace()) },
+                title = location.name,
+                subtitle = location.region.takeIf { region -> region.isNotBlank() },
+                highlighted = isDragging,
+                onClick = { onSelect(location) },
                 modifier = Modifier.longPressDraggableHandle(
-                    onDragStopped = { controller.commitOrder() }
+                    onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
+                    onDragStopped = {
+                        haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                        onDragStopped()
+                    },
                 ),
                 trailingAction = {
-                    IconButton(onClick = { controller.remove(location) }) {
-                        MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Remove")
+                    IconButton(onClick = { onRemove(location) }) {
+                        MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Remove ${location.name}")
                     }
                 }
             )
@@ -153,26 +171,32 @@ private fun LazyListScope.searchResults(
 ) {
     when (search) {
         LocationSearchState.Idle -> Unit
-        LocationSearchState.Loading -> item {
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        LocationSearchState.Loading -> item(key = "search-loading") {
+            Column(
+                Modifier.animateItem().fillMaxWidth().padding(vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
                 CircularProgressIndicator()
                 Spacer(Modifier.height(12.dp))
                 Text("Searching locations...")
             }
         }
-        is LocationSearchState.Error -> item { BoxMessage(search.message) }
+        is LocationSearchState.Error -> item(key = "search-error") {
+            BoxMessage(search.message, Modifier.animateItem())
+        }
         is LocationSearchState.Ready -> {
             if (search.results.isEmpty()) {
-                item { BoxMessage("No locations found.") }
+                item(key = "search-empty") { BoxMessage("No locations found.", Modifier.animateItem()) }
             }
             items(search.results, key = { result -> "result-${result.key}" }) { location ->
                 val isSaved = location.key in savedKeys
 
                 LocationListItem(
-                    location = location,
-                    icon = MaterialSymbols.LOCATION_ON,
+                    title = location.name,
+                    subtitle = location.region.takeIf { region -> region.isNotBlank() },
                     iconTint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = { onSelect(location) },
+                    modifier = Modifier.animateItem(),
                     trailingAction = {
                         IconButton(
                             onClick = {
@@ -188,63 +212,6 @@ private fun LazyListScope.searchResults(
                     }
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun LocationListItem(
-    location: LocationResult,
-    onClick: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-    elevation: Float = 0f,
-    icon: String = MaterialSymbols.LOCATION_ON,
-    iconTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    trailingAction: @Composable (() -> Unit)? = null
-) {
-    ListItemRow(
-        title = location.name,
-        subtitle = location.region.takeIf { region -> region.isNotBlank() },
-        icon = icon,
-        iconTint = iconTint,
-        onClick = onClick,
-        modifier = Modifier
-            .padding(vertical = 2.dp, horizontal = 8.dp)
-            .shadow(elevation.dp, shape = RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surface, shape = RoundedCornerShape(12.dp))
-            .clip(RoundedCornerShape(12.dp))
-            .then(modifier),
-        trailingAction = trailingAction
-    )
-}
-
-@Composable
-private fun ListItemRow(
-    title: String,
-    modifier: Modifier = Modifier,
-    subtitle: String? = null,
-    icon: String,
-    iconTint: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.onSurfaceVariant,
-    onClick: (() -> Unit)? = null,
-    trailingAction: @Composable (() -> Unit)? = null
-) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        MaterialSymbol(iconName = icon, contentDescription = null, tint = iconTint)
-        Spacer(Modifier.width(16.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge)
-            if (subtitle != null) {
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        if (trailingAction != null) {
-            trailingAction()
         }
     }
 }

@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class Coordinates(val latitude: Double, val longitude: Double)
+@Serializable
 data class Place(val name: String, val coordinates: Coordinates)
 data class WeatherSnapshot(
     val place: Place,
