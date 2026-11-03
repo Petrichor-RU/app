@@ -10,6 +10,7 @@ dependencies:
   - $compose.components.resources
   - $compose.preview
   - $compose.hotReload.runtimeApi
+  - $kotlin.serialization.json
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
   - $libs.ktor.client.core
@@ -43,7 +44,7 @@ settings:
     ksp:
       processors:
         - $libs.androidx.room.compiler
-    serialization: json
+    serialization: enabled
   compose:
     enabled: true
     resources:
