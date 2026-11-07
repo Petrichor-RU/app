@@ -1,14 +1,9 @@
 package nl.petrichor.app.ui.weather
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -60,15 +55,9 @@ fun LocationHeader(
                 AnimatedContent(
                     targetState = locationName,
                     transitionSpec = {
-                        (slideInVertically(spring(stiffness = Spring.StiffnessMediumLow)) { height -> height / 2 } +
-                            fadeIn(tween(220)))
-                            .togetherWith(
-                                slideOutVertically(spring(stiffness = Spring.StiffnessMediumLow)) { height -> -height / 2 } +
-                                    fadeOut(tween(120))
-                            )
-                            .using(SizeTransform(clip = false))
+                        (slideInVertically { it / 2 } + fadeIn())
+                            .togetherWith(slideOutVertically { -it / 2 } + fadeOut())
                     },
-                    label = "location_name",
                 ) { name ->
                     Text(
                         text = name,
@@ -82,15 +71,7 @@ fun LocationHeader(
         }
         Spacer(Modifier.width(12.dp))
         FilledTonalIconButton(onClick = onTogglePicker) {
-            AnimatedContent(
-                targetState = pickerOpen,
-                transitionSpec = {
-                    (scaleIn(spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium), initialScale = 0.6f) +
-                        fadeIn(tween(150)))
-                        .togetherWith(scaleOut(tween(120), targetScale = 0.6f) + fadeOut(tween(120)))
-                },
-                label = "picker_toggle_icon",
-            ) { open ->
+            Crossfade(targetState = pickerOpen) { open ->
                 MaterialSymbol(
                     iconName = if (open) MaterialSymbols.CLOSE else MaterialSymbols.SEARCH,
                     contentDescription = if (open) "Close location picker" else "Search locations",

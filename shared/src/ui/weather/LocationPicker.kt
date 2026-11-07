@@ -21,9 +21,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.hapticfeedback.HapticFeedback
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,12 +43,10 @@ fun LocationPicker(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val savedKeys = remember(state.saved) { state.saved.mapTo(HashSet()) { it.key } }
-    val haptics = LocalHapticFeedback.current
 
     val lazyListState = rememberLazyListState()
     val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
         viewModel.move(from.key, to.key)
-        haptics.performHapticFeedback(HapticFeedbackType.SegmentFrequentTick)
     }
 
     Column(modifier.fillMaxSize()) {
@@ -92,10 +87,8 @@ fun LocationPicker(
                 savedLocations(
                     saved = state.saved,
                     reorderState = reorderState,
-                    haptics = haptics,
-                    onSelect = { location -> onLocationSelected(location.toPlace()) },
-                    onRemove = viewModel::remove,
-                    onDragStopped = viewModel::commitOrder,
+                    viewModel = viewModel,
+                    onLocationSelected = onLocationSelected,
                 )
             } else {
                 searchResults(
@@ -116,10 +109,8 @@ fun LocationPicker(
 private fun LazyListScope.savedLocations(
     saved: List<LocationResult>,
     reorderState: ReorderableLazyListState,
-    haptics: HapticFeedback,
-    onSelect: (LocationResult) -> Unit,
-    onRemove: (LocationResult) -> Unit,
-    onDragStopped: () -> Unit,
+    viewModel: LocationPickerViewModel,
+    onLocationSelected: (Place) -> Unit,
 ) {
     item(key = "saved-header") {
         Text(
@@ -142,18 +133,14 @@ private fun LazyListScope.savedLocations(
         ReorderableItem(reorderState, key = location.key) { isDragging ->
             LocationListItem(
                 title = location.name,
-                subtitle = location.region.takeIf { region -> region.isNotBlank() },
+                subtitle = location.region,
                 highlighted = isDragging,
-                onClick = { onSelect(location) },
+                onClick = { onLocationSelected(location.toPlace()) },
                 modifier = Modifier.longPressDraggableHandle(
-                    onDragStarted = { haptics.performHapticFeedback(HapticFeedbackType.LongPress) },
-                    onDragStopped = {
-                        haptics.performHapticFeedback(HapticFeedbackType.GestureEnd)
-                        onDragStopped()
-                    },
+                    onDragStopped = viewModel::commitOrder
                 ),
                 trailingAction = {
-                    IconButton(onClick = { onRemove(location) }) {
+                    IconButton(onClick = { viewModel.remove(location) }) {
                         MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Remove ${location.name}")
                     }
                 }
@@ -193,7 +180,7 @@ private fun LazyListScope.searchResults(
 
                 LocationListItem(
                     title = location.name,
-                    subtitle = location.region.takeIf { region -> region.isNotBlank() },
+                    subtitle = location.region,
                     iconTint = if (isSaved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                     onClick = { onSelect(location) },
                     modifier = Modifier.animateItem(),

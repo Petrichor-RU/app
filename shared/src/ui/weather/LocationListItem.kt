@@ -1,10 +1,7 @@
 package nl.petrichor.app.ui.weather
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Column
@@ -13,7 +10,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -30,11 +26,6 @@ import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
 
-private val itemShape = RoundedCornerShape(12.dp)
-
-private const val pressedScale = 0.97f
-private const val highlightedScale = 1.015f
-
 @Composable
 fun LocationListItem(
     title: String,
@@ -48,42 +39,21 @@ fun LocationListItem(
 ) {
     val colors = MaterialTheme.colorScheme
     val cardColors = CardDefaults.cardColors()
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
 
     val scale by animateFloatAsState(
-        targetValue = when {
-            highlighted -> highlightedScale
-            pressed -> pressedScale
+        when {
+            highlighted -> 1.02f
+            pressed -> 0.98f
             else -> 1f
-        },
-        animationSpec = spring(dampingRatio = 0.6f, stiffness = Spring.StiffnessMedium),
-        label = "location_item_scale",
+        }
     )
     val containerColor by animateColorAsState(
-        targetValue = if (highlighted) colors.primaryContainer else cardColors.containerColor,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "location_item_container",
+        if (highlighted) colors.primaryContainer else cardColors.containerColor
     )
     val contentColor by animateColorAsState(
-        targetValue = if (highlighted) colors.onPrimaryContainer else cardColors.contentColor,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "location_item_content",
-    )
-    val subtitleColor by animateColorAsState(
-        targetValue = if (highlighted) colors.onPrimaryContainer.copy(alpha = 0.8f) else colors.onSurfaceVariant,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "location_item_subtitle",
-    )
-    val resolvedIconTint by animateColorAsState(
-        targetValue = if (highlighted) colors.primary else iconTint,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "location_item_icon",
-    )
-    val elevation by animateDpAsState(
-        targetValue = if (highlighted) 2.dp else 0.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "location_item_elevation",
+        if (highlighted) colors.onPrimaryContainer else cardColors.contentColor
     )
 
     Surface(
@@ -95,17 +65,20 @@ fun LocationListItem(
                 scaleY = scale
             }
             .fillMaxWidth(),
-        shape = itemShape,
+        shape = CardDefaults.shape,
         color = containerColor,
         contentColor = contentColor,
-        shadowElevation = elevation,
-        interactionSource = source,
+        interactionSource = interactionSource,
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            MaterialSymbol(iconName = icon, contentDescription = null, tint = resolvedIconTint)
+            MaterialSymbol(
+                iconName = icon,
+                contentDescription = null,
+                tint = if (highlighted) colors.primary else iconTint,
+            )
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
                 Text(
@@ -114,11 +87,11 @@ fun LocationListItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (subtitle != null) {
+                if (!subtitle.isNullOrBlank()) {
                     Text(
                         text = subtitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        color = subtitleColor,
+                        color = contentColor.copy(alpha = 0.75f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )

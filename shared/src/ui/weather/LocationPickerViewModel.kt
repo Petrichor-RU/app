@@ -84,7 +84,7 @@ class LocationPickerViewModel(
             s.copy(saved = s.saved.toMutableList().apply { add(toIndex, removeAt(fromIndex)) })
         }
     }
-    
+
     fun commitOrder() {
         val order = _state.value.saved
         viewModelScope.launch { savedRepository.update { order } }
