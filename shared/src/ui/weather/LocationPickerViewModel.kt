@@ -1,4 +1,4 @@
-package nl.petrichor.app.ui
+package nl.petrichor.app.ui.weather
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -31,7 +31,7 @@ data class LocationPickerUiState(
     val saved: List<LocationResult> = emptyList(),
 )
 
-class LocationPickerController(
+class LocationPickerViewModel(
     private val searchRepository: LocationSearchRepository = LocationSearchRepository(),
     private val savedRepository: SavedLocationsRepository = SavedLocationsRepository(),
 ) : ViewModel() {
@@ -76,9 +76,11 @@ class LocationPickerController(
         viewModelScope.launch { savedRepository.remove(location) }
     }
 
-    fun move(fromIndex: Int, toIndex: Int) {
+    fun move(fromKey: Any, toKey: Any) {
         _state.update { s ->
-            if (fromIndex !in s.saved.indices || toIndex !in s.saved.indices) return@update s
+            val fromIndex = s.saved.indexOfFirst { it.key == fromKey }
+            val toIndex = s.saved.indexOfFirst { it.key == toKey }
+            if (fromIndex == -1 || toIndex == -1) return@update s
             s.copy(saved = s.saved.toMutableList().apply { add(toIndex, removeAt(fromIndex)) })
         }
     }
@@ -87,5 +89,4 @@ class LocationPickerController(
         val order = _state.value.saved
         viewModelScope.launch { savedRepository.update { order } }
     }
-
 }

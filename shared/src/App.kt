@@ -21,7 +21,7 @@ import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import kotlinx.coroutines.launch
 
 import nl.petrichor.app.ui.BoxMessage
-import nl.petrichor.app.ui.WeatherScreen
+import nl.petrichor.app.ui.weather.WeatherScreen
 import nl.petrichor.app.ui.wardrobe.WardrobeScreen
 
 private const val tabCount = 4
