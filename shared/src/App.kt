@@ -72,7 +72,7 @@ fun App() {
                                 iconName = MaterialSymbols.FOR_YOU,
                                 contentDescription = null,
                             )
-                        }, label = { Text("Recommendations") })
+                        }, label = { Text("Suggestions") })
                         NavigationBarItem(selected = selectedTab == 4, onClick = {
                             coroutineScope.launch { pagerState.animateScrollToPage(4) }
                         }, icon = {
