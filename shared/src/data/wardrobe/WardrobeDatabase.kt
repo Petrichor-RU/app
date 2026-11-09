@@ -1,10 +1,10 @@
 package nl.petrichor.app.data.wardrobe
 
-import androidx.room.ConstructedBy
-import androidx.room.Database
-import androidx.room.RoomDatabase
-import androidx.room.RoomDatabaseConstructor
-import androidx.room.TypeConverters
+import androidx.room3.ConstructedBy
+import androidx.room3.Database
+import androidx.room3.RoomDatabase
+import androidx.room3.RoomDatabaseConstructor
+import androidx.room3.ColumnTypeConverters
 
 /**
  * Room database for wardrobe functionality
@@ -16,7 +16,7 @@ import androidx.room.TypeConverters
     exportSchema = false
 )
 @ConstructedBy(WardrobeDatabaseConstructor::class)
-@TypeConverters(WardrobeConverters::class)
+@ColumnTypeConverters(WardrobeConverters::class)
 abstract class WardrobeDatabase : RoomDatabase() {
 
     abstract fun clothingDao(): ClothingDao
@@ -26,6 +26,7 @@ abstract class WardrobeDatabase : RoomDatabase() {
     }
 }
 
+@Suppress("KotlinNoActualForExpect")
 expect object WardrobeDatabaseConstructor : RoomDatabaseConstructor<WardrobeDatabase> {
     override fun initialize(): WardrobeDatabase
 }
@@ -34,3 +35,5 @@ expect object WardrobeDatabaseConstructor : RoomDatabaseConstructor<WardrobeData
 expect object WardrobeDatabaseProvider {
     fun getDatabase(): WardrobeDatabase
 }
+
+expect fun defaultClothingDao(): ClothingDao

@@ -23,6 +23,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -31,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
@@ -38,15 +40,13 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingImageStorage
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
-import nl.petrichor.app.data.wardrobe.imageUriForLoading
+import nl.petrichor.app.data.wardrobe.loadClothingImagePainter
 import nl.petrichor.app.platform.isCameraAvailable
 import nl.petrichor.app.platform.isImageCropAvailable
 import io.github.ismoy.imagepickerkmp.config.CropConfig
 import io.github.ismoy.imagepickerkmp.config.GalleryConfig
-import io.github.ismoy.imagepickerkmp.extensions.loadPainter
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerKMPConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerResult
-import io.github.ismoy.imagepickerkmp.picker.PhotoResult
 import io.github.ismoy.imagepickerkmp.picker.rememberImagePickerKMP
 import kotlinx.coroutines.launch
 
@@ -87,6 +87,15 @@ fun AddClothingDialog(
         )
     )
     val selectedPhoto = (imagePicker.result as? ImagePickerResult.Success)?.first
+    var selectedPhotoPainter by remember { mutableStateOf<Painter?>(null) }
+
+    LaunchedEffect(selectedPhoto, useNewImage) {
+        selectedPhotoPainter = if (useNewImage && selectedPhoto != null) {
+            ClothingImageStorage.loadPhotoPainter(selectedPhoto)
+        } else {
+            null
+        }
+    }
 
     // Determine current image
     val currentImagePath = if (useNewImage && selectedPhoto != null) {
@@ -115,7 +124,7 @@ fun AddClothingDialog(
                     ) {
                         when {
                             selectedPhoto != null && useNewImage -> {
-                                selectedPhoto.loadPainter()?.let { painter ->
+                                selectedPhotoPainter?.let { painter ->
                                     Image(
                                         painter = painter,
                                         contentDescription = "New clothing photo",
@@ -125,7 +134,7 @@ fun AddClothingDialog(
                             }
                             currentImagePath?.isNotEmpty() == true -> {
                                 val painter = currentImagePath.let {
-                                    PhotoResult(uri = imageUriForLoading(it)).loadPainter()
+                                    loadClothingImagePainter(it)
                                 }
                                 if (painter != null) {
                                     Image(

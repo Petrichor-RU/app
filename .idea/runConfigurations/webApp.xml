@@ -1,0 +1,7 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="webApp" type="Kotlin CLI" factoryName="Kotlin CLI">
+    <option name="module" value="webApp" />
+    <option name="additionalArguments" value="--open-browser" />
+    <method v="2" />
+  </configuration>
+</component>

@@ -3,6 +3,8 @@ package nl.petrichor.app.data.wardrobe
 import android.content.Context
 import io.github.ismoy.imagepickerkmp.extensions.loadBytes
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
+import io.github.ismoy.imagepickerkmp.extensions.loadPainter
+import androidx.compose.ui.graphics.painter.Painter
 import java.io.File
 
 private var appContext: Context? = null
@@ -11,7 +13,7 @@ fun initClothingImageStorage(context: Context) {
     appContext = context.applicationContext
 }
 
-internal actual fun saveClothingImage(photo: PhotoResult, extension: String): String {
+internal actual suspend fun saveClothingImage(photo: PhotoResult, extension: String): String {
     val context = checkNotNull(appContext) {
         "ClothingImageStorage must be initialized before saving images."
     }
@@ -21,10 +23,16 @@ internal actual fun saveClothingImage(photo: PhotoResult, extension: String): St
     return file.absolutePath
 }
 
-internal actual fun deleteClothingImage(path: String) {
+internal actual suspend fun deleteClothingImage(path: String) {
     check(File(path).delete() || !File(path).exists()) {
         "Could not delete clothing image."
     }
 }
 
 internal actual fun imageUriForLoading(path: String): String = path
+
+internal actual fun loadClothingImagePainter(path: String): Painter? =
+    PhotoResult(uri = imageUriForLoading(path)).loadPainter()
+
+internal actual suspend fun loadClothingPhotoPainter(photo: PhotoResult): Painter? =
+    photo.loadPainter()
