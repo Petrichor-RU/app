@@ -9,6 +9,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import nl.petrichor.app.data.location.initLocationDataStore
 import nl.petrichor.app.data.wardrobe.WardrobeDatabaseProvider
 import nl.petrichor.app.data.wardrobe.initClothingImageStorage
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import nl.petrichor.app.data.outfitLog.OutfitLogDatabaseProvider
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -16,9 +19,21 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         initLocationDataStore(this)
 
-        // Initialize Room database
+        // Initialize Room databases
         WardrobeDatabaseProvider.init(this)
+        OutfitLogDatabaseProvider.init(this)
+
+        // Initialize image storage
         initClothingImageStorage(this)
+
+        // Open the outfit logging database
+        // This also ensures that its physical database file is created.
+        lifecycleScope.launch {
+            OutfitLogDatabaseProvider
+                .getDatabase()
+                .outfitLogDao()
+                .getLogCount()
+        }
 
         setContent {
             App()

@@ -43,4 +43,8 @@ interface ClothingDao {
 
     @Insert
     suspend fun insertType(type: ClothingType): Long
+
+//    helps in retrieving the actual category name ex T-shirt, rather than storing the category id
+    @Query("SELECT * FROM clothing_types WHERE id = :typeId LIMIT 1")
+    suspend fun getTypeById(typeId: Long): ClothingType?
 }
