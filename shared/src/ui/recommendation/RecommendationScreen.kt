@@ -15,12 +15,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import dev.catbit.material_symbols.MaterialSymbol
-import dev.catbit.material_symbols.MaterialSymbols
+import com.kizitonwose.calendar.core.now
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.datetime.*
+import kotlinx.datetime.LocalDate
 import nl.petrichor.app.data.currentPlace
 import nl.petrichor.app.data.recommendation.dayWeatherFor
 import nl.petrichor.app.data.recommendation.forecastDates
@@ -69,7 +68,7 @@ fun RecommendationScreen(
     val allClothing by controller.allClothing.collectAsStateWithLifecycle(emptyList())
     val clothingTypes by controller.clothingTypes.collectAsStateWithLifecycle(emptyList())
 
-    val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
+    val today = remember { LocalDate.now() }
     var selectedDateIso by rememberSaveable { mutableStateOf(today.toString()) }
     val selectedDate = LocalDate.parse(selectedDateIso)
 

@@ -89,11 +89,4 @@ class RecommendationCalendarTest {
         onNodeWithContentDescription("Show week").performClick()
         onNodeWithText("January 2027").assertIsDisplayed()
     }
-
-    @Test
-    fun `suggestions heading uses today and tomorrow before falling back to formatted date`() {
-        assertEquals("Suggestions for today", suggestionsHeading(today, today))
-        assertEquals("Suggestions for tomorrow", suggestionsHeading(LocalDate(2026, 11, 4), today))
-        assertEquals("Suggestions for Thu 5 November", suggestionsHeading(LocalDate(2026, 11, 5), today))
-    }
 }

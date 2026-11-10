@@ -22,6 +22,7 @@ dependencies:
   - $libs.androidx.room.runtime
   - $libs.sqlite.bundled
   - $libs.imagepickerkmp
+  - $libs.kizitonwose.calendar
 
 dependencies@android:
   - $compose.uiTooling
