@@ -1,0 +1,9 @@
+{
+  "name": "@androidx/sqlite-web-worker",
+  "version": "0.0.0",
+  "description": "SQLite web worker for the Petrichor web application",
+  "private": true,
+  "dependencies": {
+    "@sqlite.org/sqlite-wasm": "^3.50.1-build1"
+  }
+}

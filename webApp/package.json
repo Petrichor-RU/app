@@ -1,0 +1,8 @@
+{
+  "name": "petrichor-web-app",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@androidx/sqlite-web-worker": "file:./web-worker"
+  }
+}
