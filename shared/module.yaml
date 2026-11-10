@@ -10,15 +10,18 @@ dependencies:
   - $compose.components.resources
   - $compose.preview
   - $compose.hotReload.runtimeApi
+  - $kotlin.serialization.json
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
   - $libs.ktor.client.core
+  - $libs.kotlinx.datetime
   - $libs.compass.geolocation
   - $libs.material.symbols
   - $libs.androidx.datastore.preferences.core
   - $libs.calvin.reorderable
   - $libs.androidx.room.runtime
   - $libs.imagepickerkmp
+  - $libs.kizitonwose.calendar
   - $libs.kotlinx.coroutines.test
   - $kotlin.serialization.json
 
