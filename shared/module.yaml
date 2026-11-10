@@ -1,6 +1,6 @@
 product:
   type: kmp/lib
-  platforms: [ jvm, android, iosArm64, iosSimulatorArm64 ]
+  platforms: [ jvm, android, iosArm64, iosSimulatorArm64, wasmJs ]
 
 dependencies:
   - $compose.runtime
@@ -20,35 +20,45 @@ dependencies:
   - $libs.androidx.datastore.preferences.core
   - $libs.calvin.reorderable
   - $libs.androidx.room.runtime
-  - $libs.sqlite.bundled
   - $libs.imagepickerkmp
   - $libs.kizitonwose.calendar
+  - $libs.kotlinx.coroutines.test
+  - $kotlin.serialization.json
 
 dependencies@android:
   - $compose.uiTooling
   - $libs.androidx.activity.compose
   - $libs.compass.geolocation.mobile
   - $libs.ktor.client.cio
+  - $libs.sqlite.bundled
 
 dependencies@ios:
   - $libs.compass.geolocation.mobile
   - $libs.ktor.client.darwin
+  - $libs.sqlite.bundled
 
 dependencies@jvm:
   - $libs.ktor.client.cio
   - $compose.uiTest
   - $libs.skiko.awt.runtime.linux.x64
+  - $libs.sqlite.bundled
+
+dependencies@wasmJs:
+  - $libs.ktor.client.js
+  - $libs.compass.geolocation.browser
+  - $libs.sqlite.web
 
 
 settings:
   kotlin:
+    serialization: enabled
     ksp:
       processors:
-        - $libs.androidx.room.compiler
-    serialization: enabled
+              - $libs.androidx.room.compiler
   compose:
     enabled: true
     resources:
       packageName: nl.petrichor.app.resources
       # Generate public accessors so other modules (and previews) can use Res.*
       exposedAccessors: true
+  

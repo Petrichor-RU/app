@@ -1,19 +1,19 @@
 package nl.petrichor.app.data.wardrobe
 
-import androidx.room.TypeConverter
+import androidx.room3.ColumnTypeConverter
 
 class WardrobeConverters {
-    @TypeConverter
+    @ColumnTypeConverter
     fun materialToString(material: Material): String = material.name
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun stringToMaterial(value: String): Material =
         Material.entries.firstOrNull { it.name == value } ?: Material.UNKNOWN
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun supertypeToString(supertype: ClothingSupertype): String = supertype.name
 
-    @TypeConverter
+    @ColumnTypeConverter
     fun stringToSupertype(value: String): ClothingSupertype =
         ClothingSupertype.entries.firstOrNull { it.name == value }
             ?: error("Unknown clothing supertype: $value")

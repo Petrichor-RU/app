@@ -11,9 +11,11 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSUUID
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.NSURL
+import io.github.ismoy.imagepickerkmp.extensions.loadPainter
+import androidx.compose.ui.graphics.painter.Painter
 
 @OptIn(ExperimentalForeignApi::class)
-internal actual fun saveClothingImage(photo: PhotoResult, extension: String): String {
+internal actual suspend fun saveClothingImage(photo: PhotoResult, extension: String): String {
     val fileManager = NSFileManager.defaultManager
     val directory = "${documentDirectory()}/wardrobe-images"
     if (!fileManager.fileExistsAtPath(directory)) {
@@ -53,7 +55,7 @@ internal actual fun saveClothingImage(photo: PhotoResult, extension: String): St
 }
 
 @OptIn(ExperimentalForeignApi::class)
-internal actual fun deleteClothingImage(path: String) {
+internal actual suspend fun deleteClothingImage(path: String) {
     val fileManager = NSFileManager.defaultManager
     val filePath = imageUriForLoading(path)
     check(fileManager.removeItemAtPath(filePath, null) || !fileManager.fileExistsAtPath(filePath)) {
@@ -64,6 +66,12 @@ internal actual fun deleteClothingImage(path: String) {
 internal actual fun imageUriForLoading(path: String): String {
     return requireNotNull(NSURL.fileURLWithPath("${documentDirectory()}/$path").absoluteString)
 }
+
+internal actual fun loadClothingImagePainter(path: String): Painter? =
+    PhotoResult(uri = imageUriForLoading(path)).loadPainter()
+
+internal actual suspend fun loadClothingPhotoPainter(photo: PhotoResult): Painter? =
+    photo.loadPainter()
 
 @OptIn(ExperimentalForeignApi::class)
 private fun documentDirectory(): String {
