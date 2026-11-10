@@ -106,4 +106,7 @@ private class FakeClothingDao : ClothingDao {
     }
 
     override suspend fun insertType(type: ClothingType): Long = type.id
+    override suspend fun getTypeById(typeId: Long): ClothingType? {
+        TODO("Not yet implemented")
+    }
 }

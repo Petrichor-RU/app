@@ -23,8 +23,9 @@ import kotlinx.coroutines.launch
 import nl.petrichor.app.ui.BoxMessage
 import nl.petrichor.app.ui.WeatherScreen
 import nl.petrichor.app.ui.wardrobe.WardrobeScreen
+import nl.petrichor.app.ui.outfitLog.OutfitLogScreen
 
-private const val tabCount = 4
+private const val tabCount = 5
 
 @Composable
 fun App() {
@@ -38,42 +39,89 @@ fun App() {
                 containerColor = Color(0xFFF6F8FC),
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 bottomBar = {
-                    NavigationBar {
-                        // Wardrobe tab at position 0
-                        NavigationBarItem(selected = selectedTab == 0, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(0) }
-                        }, icon = {
-                            MaterialSymbol(
-                                iconName = MaterialSymbols.CHECKROOM,
-                                contentDescription = null,
+                        NavigationBar {
+
+                            NavigationBarItem(
+                                selected = selectedTab == 0,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(0)
+                                    }
+                                },
+                                icon = {
+                                    MaterialSymbol(
+                                        iconName = MaterialSymbols.CHECKROOM,
+                                        contentDescription = null
+                                    )
+                                },
+                                label = { Text("Wardrobe") }
                             )
-                        }, label = { Text("Wardrobe") })
-                        NavigationBarItem(selected = selectedTab == 1, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(1) }
-                        }, icon = {
-                            MaterialSymbol(
-                                iconName = MaterialSymbols.HOME,
-                                contentDescription = null,
+
+                            NavigationBarItem(
+                                selected = selectedTab == 1,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(1)
+                                    }
+                                },
+                                icon = {
+                                    MaterialSymbol(
+                                        iconName = MaterialSymbols.IMAGE,
+                                        contentDescription = null
+                                    )
+                                },
+                                label = { Text("Outfits") }
                             )
-                        }, label = { Text("Home") })
-                        NavigationBarItem(selected = selectedTab == 2, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(2) }
-                        }, icon = {
-                            MaterialSymbol(
-                                iconName = MaterialSymbols.SETTINGS,
-                                contentDescription = null,
+
+                            NavigationBarItem(
+                                selected = selectedTab == 2,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(2)
+                                    }
+                                },
+                                icon = {
+                                    MaterialSymbol(
+                                        iconName = MaterialSymbols.HOME,
+                                        contentDescription = null
+                                    )
+                                },
+                                label = { Text("Home") }
                             )
-                        }, label = { Text("Settings") })
-                        NavigationBarItem(selected = selectedTab == 3, onClick = {
-                            coroutineScope.launch { pagerState.animateScrollToPage(3) }
-                        }, icon = {
-                            MaterialSymbol(
-                                iconName = MaterialSymbols.CLOUD,
-                                contentDescription = null,
+
+                            NavigationBarItem(
+                                selected = selectedTab == 3,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(3)
+                                    }
+                                },
+                                icon = {
+                                    MaterialSymbol(
+                                        iconName = MaterialSymbols.SETTINGS,
+                                        contentDescription = null
+                                    )
+                                },
+                                label = { Text("Settings") }
                             )
-                        }, label = { Text("Weather") })
-                    }
-                },
+
+                            NavigationBarItem(
+                                selected = selectedTab == 4,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        pagerState.animateScrollToPage(4)
+                                    }
+                                },
+                                icon = {
+                                    MaterialSymbol(
+                                        iconName = MaterialSymbols.CLOUD,
+                                        contentDescription = null
+                                    )
+                                },
+                                label = { Text("Weather") }
+                            )
+                        }
+                    },
             ) { padding ->
                 HorizontalPager(
                     state = pagerState,
@@ -83,7 +131,13 @@ fun App() {
                 ) { page ->
                     when (page) {
                         0 -> WardrobeScreen()
-                        3 -> WeatherScreen(modifier = Modifier.statusBarsPadding())
+
+                        1 -> OutfitLogScreen()
+
+                        4 -> WeatherScreen(
+                            modifier = Modifier.statusBarsPadding()
+                        )
+
                         else -> BoxMessage(
                             "This tab is coming soon.",
                             modifier = Modifier.statusBarsPadding()
