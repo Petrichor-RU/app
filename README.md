@@ -21,6 +21,29 @@ command line:
 - Desktop app: `./kotlin run -m desktopApp`
 - iOS app: `./kotlin run -m iosApp`
 
+### Building a deployable WASM version
+
+The web application is compiled to Kotlin/WASM by the `webApp` module. Build its release
+distribution with:
+
+```shell
+./kotlin build -m webApp -p wasmJs -v release
+```
+
+The deployable static files are written to
+`build/tasks/_webApp_buildWasmJsAppWasmJsRelease/`. Upload the contents of that directory
+to any static web host, keeping the generated `.wasm`, `.mjs`, and other asset files
+alongside `index.html`. For a local smoke test, serve the directory over HTTP instead of
+opening `index.html` directly:
+
+```shell
+python3 webApp/serve.py build/tasks/_webApp_buildWasmJsAppWasmJsRelease
+```
+
+The custom server adds the `Cross-Origin-Opener-Policy` and
+`Cross-Origin-Embedder-Policy` headers required by SQLite's OPFS worker. Production hosting
+must send the same headers for the application and its worker assets.
+
 ### Testing
 
 Run the project's tests with `./kotlin test`, or `./kotlin test -m <module>` for a single module.

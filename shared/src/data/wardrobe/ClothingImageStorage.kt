@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.wardrobe
 
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
+import androidx.compose.ui.graphics.painter.Painter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -21,8 +22,13 @@ object ClothingImageStorage {
             deleteClothingImage(path)
         }
     }
+
+    suspend fun loadPhotoPainter(photo: PhotoResult): Painter? =
+        loadClothingPhotoPainter(photo)
 }
 
-internal expect fun saveClothingImage(photo: PhotoResult, extension: String): String
-internal expect fun deleteClothingImage(path: String)
+internal expect suspend fun saveClothingImage(photo: PhotoResult, extension: String): String
+internal expect suspend fun deleteClothingImage(path: String)
 internal expect fun imageUriForLoading(path: String): String
+internal expect fun loadClothingImagePainter(path: String): Painter?
+internal expect suspend fun loadClothingPhotoPainter(photo: PhotoResult): Painter?

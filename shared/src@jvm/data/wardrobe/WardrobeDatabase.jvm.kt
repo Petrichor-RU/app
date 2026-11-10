@@ -1,6 +1,6 @@
 package nl.petrichor.app.data.wardrobe
 
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 import java.io.File
@@ -24,3 +24,5 @@ actual object WardrobeDatabaseProvider {
 
     actual fun getDatabase(): WardrobeDatabase = dbInstance
 }
+
+actual fun defaultClothingDao(): ClothingDao = WardrobeDatabaseProvider.getDatabase().clothingDao()

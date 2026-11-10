@@ -3,14 +3,14 @@ package nl.petrichor.app.data.wardrobe
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class WardrobeRepositoryTest {
     @Test
-    fun `adding a new item supplies a creation timestamp`() = runBlocking {
+    fun `adding a new item supplies a creation timestamp`() = runTest {
         val dao = FakeClothingDao()
         val repository = WardrobeRepository(dao, kotlinx.coroutines.Dispatchers.Unconfined)
         val clothing = clothing(createdAt = 0L)
@@ -22,7 +22,7 @@ class WardrobeRepositoryTest {
     }
 
     @Test
-    fun `adding an existing item preserves its creation timestamp`() = runBlocking {
+    fun `adding an existing item preserves its creation timestamp`() = runTest {
         val dao = FakeClothingDao()
         val repository = WardrobeRepository(dao, kotlinx.coroutines.Dispatchers.Unconfined)
         val clothing = clothing(createdAt = 1234L)
@@ -33,7 +33,7 @@ class WardrobeRepositoryTest {
     }
 
     @Test
-    fun `getting clothing types seeds built-ins before reading`() = runBlocking {
+    fun `getting clothing types seeds built-ins before reading`() = runTest {
         val dao = FakeClothingDao()
         val repository = WardrobeRepository(dao, kotlinx.coroutines.Dispatchers.Unconfined)
 
@@ -44,7 +44,7 @@ class WardrobeRepositoryTest {
     }
 
     @Test
-    fun `repository delegates reads and mutations to the dao`() = runBlocking {
+    fun `repository delegates reads and mutations to the dao`() = runTest {
         val dao = FakeClothingDao()
         val repository = WardrobeRepository(dao, kotlinx.coroutines.Dispatchers.Unconfined)
         val clothing = clothing(createdAt = 1234L)
