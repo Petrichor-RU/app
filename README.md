@@ -37,9 +37,12 @@ alongside `index.html`. For a local smoke test, serve the directory over HTTP in
 opening `index.html` directly:
 
 ```shell
-cd build/tasks/_webApp_buildWasmJsAppWasmJsRelease
-python3 -m http.server 8080
+python3 webApp/serve.py build/tasks/_webApp_buildWasmJsAppWasmJsRelease
 ```
+
+The custom server adds the `Cross-Origin-Opener-Policy` and
+`Cross-Origin-Embedder-Policy` headers required by SQLite's OPFS worker. Production hosting
+must send the same headers for the application and its worker assets.
 
 ### Testing
 

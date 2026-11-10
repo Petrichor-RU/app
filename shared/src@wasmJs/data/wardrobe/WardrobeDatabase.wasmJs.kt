@@ -18,6 +18,11 @@ actual object WardrobeDatabaseProvider {
 
 @OptIn(ExperimentalWasmJsInterop::class)
 private fun sqliteWorker(): Worker =
-    js("""new Worker(new URL("@androidx/sqlite-web-worker/worker.js", import.meta.url))""")
+    js(
+        """new Worker(
+            new URL("@androidx/sqlite-web-worker/worker.js", import.meta.url),
+            { type: "module" }
+        )"""
+    )
 
 actual fun defaultClothingDao(): ClothingDao = WardrobeDatabaseProvider.getDatabase().clothingDao()

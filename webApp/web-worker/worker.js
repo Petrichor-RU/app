@@ -1,4 +1,4 @@
-import sqlite3InitModule from '@sqlite.org/sqlite-wasm';
+import sqlite3InitModule from './sqlite3-bundler-friendly.mjs';
 
 let sqlite3 = null;
 
@@ -134,9 +134,22 @@ onmessage = (event) => {
     }
 };
 
-sqlite3InitModule().then((instance) => {
-    sqlite3 = instance;
-    while (messageQueue.length > 0) {
-        handleMessage(messageQueue.shift());
-    }
-});
+sqlite3InitModule()
+    .then((instance) => {
+        if (typeof instance.oo1?.OpfsDb !== "function") {
+            throw new Error(
+                "SQLite OPFS is unavailable. Serve the app with " +
+                "Cross-Origin-Opener-Policy: same-origin and " +
+                "Cross-Origin-Embedder-Policy: require-corp headers."
+            );
+        }
+
+        sqlite3 = instance;
+        while (messageQueue.length > 0) {
+            handleMessage(messageQueue.shift());
+        }
+    })
+    .catch((error) => {
+        console.error("SQLite worker initialization failed:", error);
+        throw error;
+    });
