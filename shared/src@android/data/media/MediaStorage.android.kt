@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.core.net.toUri
+import androidx.exifinterface.media.ExifInterface
 import io.github.ismoy.imagepickerkmp.extensions.loadBytes
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
 import java.io.File
@@ -81,19 +82,50 @@ internal actual suspend fun loadPickedPhotoPainter(photo: PhotoResult): Painter?
 private fun loadExifOrientedPainter(uri: String): Painter? =
     painterCache.get(uri)
         ?: readImageBytes(uri)?.let { bytes ->
-            decodeExifOrientedBitmap(bytes)?.let { bitmap ->
+            decodeExifOrientedBitmap(bytes, exifOrientationOfUri(uri, bytes))?.let { bitmap ->
                 BitmapPainter(bitmap.asImageBitmap()).also { painterCache.put(uri, it) }
             }
         }
 
 /**
- * Decodes [bytes] into a bitmap with the EXIF orientation applied. BitmapFactory
+ * Reads the EXIF orientation for [uri]. When [uri] is a local file we read the tag
+ * from the file path (ExifInterface(String)), the same constructor the image
+ * picker uses — the InputStream-based constructor misreads the tag on some
+ * camera JPEGs, which made freshly taken photos render upside down. Falls back
+ * to parsing [bytes] for content:// URIs.
+ */
+private fun exifOrientationOfUri(
+    uri: String,
+    bytes: ByteArray,
+): Int {
+    val file =
+        when {
+            uri.startsWith("file://") -> File(uri.toUri().path.orEmpty())
+            uri.startsWith("content://") -> null
+            else -> File(uri)
+        }
+    if (file != null && file.exists()) {
+        return runCatching {
+            ExifInterface(file.absolutePath).getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL,
+            )
+        }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    }
+    return exifOrientationOf(bytes)
+}
+
+/**
+ * Decodes [bytes] into a bitmap with the EXIF [orientation] applied. BitmapFactory
  * ignores the EXIF orientation tag, so portrait photos would otherwise render
  * rotated 90 degrees.
  */
-private fun decodeExifOrientedBitmap(bytes: ByteArray): Bitmap? {
+private fun decodeExifOrientedBitmap(
+    bytes: ByteArray,
+    orientation: Int,
+): Bitmap? {
     val decoded = decodeDownsampled(bytes) ?: return null
-    return applyExifTransform(decoded, exifOrientationOf(bytes))
+    return applyExifTransform(decoded, orientation)
 }
 
 private fun decodeDownsampled(bytes: ByteArray): Bitmap? {
