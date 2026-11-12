@@ -1,7 +1,7 @@
 package nl.petrichor.app.data.wardrobe
 
 import android.content.Context
-import androidx.room.Room
+import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 
@@ -23,9 +23,13 @@ actual object WardrobeDatabaseProvider {
             .setQueryCoroutineContext(Dispatchers.IO)
             .build()
         }
+
     }
 
     actual fun getDatabase(): WardrobeDatabase {
         return dbInstance ?: throw IllegalStateException("WardrobeDatabase not initialized. Call WardrobeDatabaseProvider.init(context) first.")
     }
+
 }
+
+actual fun defaultClothingDao(): ClothingDao = WardrobeDatabaseProvider.getDatabase().clothingDao()

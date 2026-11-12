@@ -12,7 +12,7 @@ import kotlin.time.Clock
  * Handles data access and business logic
  */
 class WardrobeRepository(
-    private val clothingDao: ClothingDao = WardrobeDatabaseProvider.getDatabase().clothingDao(),
+    private val clothingDao: ClothingDao = defaultClothingDao(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) {
 

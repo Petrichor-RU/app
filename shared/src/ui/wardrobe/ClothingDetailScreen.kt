@@ -37,9 +37,7 @@ import dev.catbit.material_symbols.MaterialSymbols
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
-import io.github.ismoy.imagepickerkmp.extensions.loadPainter
-import io.github.ismoy.imagepickerkmp.picker.PhotoResult
-import nl.petrichor.app.data.wardrobe.imageUriForLoading
+import nl.petrichor.app.data.wardrobe.loadClothingImagePainter
 
 /**
  * Fullscreen screen for showing clothing item details with edit and delete options.
@@ -139,7 +137,7 @@ fun ClothingDetailScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     val painter = if (clothing.imagePath.isNotEmpty()) {
-                        PhotoResult(uri = imageUriForLoading(clothing.imagePath)).loadPainter()
+                        loadClothingImagePainter(clothing.imagePath)
                     } else {
                         null
                     }

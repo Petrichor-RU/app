@@ -1,0 +1,11 @@
+product:
+  type: wasm-js/app
+
+dependencies:
+  - //shared
+  - $compose.runtime
+  - $compose.ui
+
+settings:
+  compose:
+    enabled: true

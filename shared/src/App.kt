@@ -22,9 +22,10 @@ import kotlinx.coroutines.launch
 
 import nl.petrichor.app.ui.BoxMessage
 import nl.petrichor.app.ui.weather.WeatherScreen
+import nl.petrichor.app.ui.recommendation.RecommendationScreen
 import nl.petrichor.app.ui.wardrobe.WardrobeScreen
 
-private const val tabCount = 4
+private const val tabCount = 5
 
 @Composable
 fun App() {
@@ -68,6 +69,14 @@ fun App() {
                             coroutineScope.launch { pagerState.animateScrollToPage(3) }
                         }, icon = {
                             MaterialSymbol(
+                                iconName = MaterialSymbols.FOR_YOU,
+                                contentDescription = null,
+                            )
+                        }, label = { Text("Suggestions") })
+                        NavigationBarItem(selected = selectedTab == 4, onClick = {
+                            coroutineScope.launch { pagerState.animateScrollToPage(4) }
+                        }, icon = {
+                            MaterialSymbol(
                                 iconName = MaterialSymbols.CLOUD,
                                 contentDescription = null,
                             )
@@ -83,7 +92,8 @@ fun App() {
                 ) { page ->
                     when (page) {
                         0 -> WardrobeScreen()
-                        3 -> WeatherScreen(modifier = Modifier.statusBarsPadding())
+                        3 -> RecommendationScreen(modifier = Modifier.statusBarsPadding())
+                        4 -> WeatherScreen(modifier = Modifier.statusBarsPadding())
                         else -> BoxMessage(
                             "This tab is coming soon.",
                             modifier = Modifier.statusBarsPadding()
