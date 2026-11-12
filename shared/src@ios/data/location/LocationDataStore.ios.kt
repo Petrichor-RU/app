@@ -10,15 +10,17 @@ import platform.Foundation.NSFileManager
 import platform.Foundation.NSUserDomainMask
 
 @OptIn(ExperimentalForeignApi::class)
-internal actual fun createLocationDataStore(): DataStore<Preferences> = PreferenceDataStoreFactory.createWithPath(
-    produceFile = {
-        val documentDirectory = NSFileManager.defaultManager.URLForDirectory(
-            directory = NSDocumentDirectory,
-            inDomain = NSUserDomainMask,
-            appropriateForURL = null,
-            create = false,
-            error = null,
-        )
-        "${requireNotNull(documentDirectory).path}/$LOCATION_DATASTORE_NAME".toPath()
-    },
-)
+internal actual fun createLocationDataStore(): DataStore<Preferences> =
+    PreferenceDataStoreFactory.createWithPath(
+        produceFile = {
+            val documentDirectory =
+                NSFileManager.defaultManager.URLForDirectory(
+                    directory = NSDocumentDirectory,
+                    inDomain = NSUserDomainMask,
+                    appropriateForURL = null,
+                    create = false,
+                    error = null,
+                )
+            "${requireNotNull(documentDirectory).path}/$LOCATION_DATASTORE_NAME".toPath()
+        },
+    )

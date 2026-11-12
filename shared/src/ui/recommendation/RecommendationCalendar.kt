@@ -66,58 +66,69 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.yearMonth
 
-private const val adjacentMonths = 500
+private const val ADJACENT_MONTHS = 500
 
-internal val consumeHorizontalScroll = object : NestedScrollConnection {
-    override fun onPostScroll(
-        consumed: Offset,
-        available: Offset,
-        source: NestedScrollSource,
-    ): Offset = Offset(available.x, 0f)
+internal val consumeHorizontalScroll =
+    object : NestedScrollConnection {
+        override fun onPostScroll(
+            consumed: Offset,
+            available: Offset,
+            source: NestedScrollSource,
+        ): Offset = Offset(available.x, 0f)
 
-    override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
-        Velocity(available.x, 0f)
-}
+        override suspend fun onPostFling(
+            consumed: Velocity,
+            available: Velocity,
+        ): Velocity = Velocity(available.x, 0f)
+    }
 
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod") // calendar view is one cohesive component
 fun RecommendationCalendar(
     selectedDate: LocalDate,
     today: LocalDate,
     onDateSelected: (LocalDate) -> Unit,
     modifier: Modifier = Modifier,
     forecastDates: Set<LocalDate> = emptySet(),
+    headerVisible: Boolean = true,
 ) {
-    val startMonth = remember(today) { today.yearMonth.minusMonths(adjacentMonths) }
-    val endMonth = remember(today) { today.yearMonth.plusMonths(adjacentMonths) }
+    val startMonth = remember(today) { today.yearMonth.minusMonths(ADJACENT_MONTHS) }
+    val endMonth = remember(today) { today.yearMonth.plusMonths(ADJACENT_MONTHS) }
     val daysOfWeek = remember { daysOfWeek() }
 
     var showFullMonth by rememberSaveable { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    val monthState = rememberCalendarState(
-        startMonth = startMonth,
-        endMonth = endMonth,
-        firstVisibleMonth = selectedDate.yearMonth,
-        firstDayOfWeek = daysOfWeek.first(),
-    )
-    val weekState = rememberWeekCalendarState(
-        startDate = startMonth.firstDay,
-        endDate = endMonth.lastDay,
-        firstVisibleWeekDate = selectedDate,
-        firstDayOfWeek = daysOfWeek.first(),
-    )
+    val monthState =
+        rememberCalendarState(
+            startMonth = startMonth,
+            endMonth = endMonth,
+            firstVisibleMonth = selectedDate.yearMonth,
+            firstDayOfWeek = daysOfWeek.first(),
+        )
+    val weekState =
+        rememberWeekCalendarState(
+            startDate = startMonth.firstDay,
+            endDate = endMonth.lastDay,
+            firstVisibleWeekDate = selectedDate,
+            firstDayOfWeek = daysOfWeek.first(),
+        )
 
-    val displayedMonth = if (showFullMonth) {
-        monthState.firstVisibleMonth.yearMonth
-    } else {
-        weekState.firstVisibleWeek.days.last().date.yearMonth
-    }
+    val displayedMonth =
+        if (showFullMonth) {
+            monthState.firstVisibleMonth.yearMonth
+        } else {
+            weekState.firstVisibleWeek.days
+                .last()
+                .date.yearMonth
+        }
 
-    val isTodayVisible = if (showFullMonth) {
-        displayedMonth == today.yearMonth
-    } else {
-        weekState.firstVisibleWeek.days.any { it.date == today }
-    }
+    val isTodayVisible =
+        if (showFullMonth) {
+            displayedMonth == today.yearMonth
+        } else {
+            weekState.firstVisibleWeek.days.any { it.date == today }
+        }
     val showToday = selectedDate != today || !isTodayVisible
 
     fun stepPage(delta: Int) {
@@ -125,18 +136,23 @@ fun RecommendationCalendar(
             if (showFullMonth) {
                 monthState.animateScrollToMonth(displayedMonth.plusMonths(delta))
             } else {
-                val nextWeekDate = weekState.firstVisibleWeek.days.first().date.plusDays(delta * 7)
+                val nextWeekDate =
+                    weekState.firstVisibleWeek.days
+                        .first()
+                        .date
+                        .plusDays(delta * 7)
                 weekState.animateScrollToWeek(nextWeekDate)
             }
         }
     }
 
     fun toggleViewMode() {
-        val targetWeekDate = if (selectedDate.yearMonth == displayedMonth) {
-            selectedDate
-        } else {
-            displayedMonth.firstDay
-        }
+        val targetWeekDate =
+            if (selectedDate.yearMonth == displayedMonth) {
+                selectedDate
+            } else {
+                displayedMonth.firstDay
+            }
         showFullMonth = !showFullMonth
         coroutineScope.launch {
             if (showFullMonth) {
@@ -149,78 +165,81 @@ fun RecommendationCalendar(
 
     Card(modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier
-                .animateContentSize()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier =
+                Modifier
+                    .animateContentSize()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(40.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = { stepPage(-1) }, modifier = Modifier.size(36.dp)) {
-                    MaterialSymbol(
-                        iconName = MaterialSymbols.CHEVRON_LEFT,
-                        contentDescription = if (showFullMonth) "Previous month" else "Previous week",
-                    )
-                }
-                Text(
-                    text = "${displayedMonth.month.displayName()} ${displayedMonth.year}",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(
-                    modifier = Modifier.width(64.dp).height(28.dp),
-                    contentAlignment = Alignment.Center,
+            if (headerVisible) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().height(40.dp).testTag("calendar_top_bar"),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showToday,
-                        enter = slideInVertically { -it / 2 } + fadeIn(),
-                        exit = slideOutVertically { -it / 2 } + fadeOut(),
+                    IconButton(onClick = { stepPage(-1) }, modifier = Modifier.size(36.dp)) {
+                        MaterialSymbol(
+                            iconName = MaterialSymbols.CHEVRON_LEFT,
+                            contentDescription = if (showFullMonth) "Previous month" else "Previous week",
+                        )
+                    }
+                    Text(
+                        text = "${displayedMonth.month.displayName()} ${displayedMonth.year}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Box(
+                        modifier = Modifier.width(64.dp).height(28.dp),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = "Today",
-                            maxLines = 1,
-                            softWrap = false,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier
-                                .clip(CircleShape)
-                                .clickable(role = Role.Button) {
-                                    onDateSelected(today)
-                                    coroutineScope.launch {
-                                        if (showFullMonth) {
-                                            monthState.animateScrollToMonth(today.yearMonth)
-                                        } else {
-                                            weekState.animateScrollToWeek(today)
-                                        }
-                                    }
-                                }
-                                .padding(4.dp),
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showToday,
+                            enter = slideInVertically { -it / 2 } + fadeIn(),
+                            exit = slideOutVertically { -it / 2 } + fadeOut(),
+                        ) {
+                            Text(
+                                text = "Today",
+                                maxLines = 1,
+                                softWrap = false,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier =
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .clickable(role = Role.Button) {
+                                            onDateSelected(today)
+                                            coroutineScope.launch {
+                                                if (showFullMonth) {
+                                                    monthState.animateScrollToMonth(today.yearMonth)
+                                                } else {
+                                                    weekState.animateScrollToWeek(today)
+                                                }
+                                            }
+                                        }.padding(4.dp),
+                            )
+                        }
+                    }
+                    IconButton(onClick = { stepPage(1) }, modifier = Modifier.size(36.dp)) {
+                        MaterialSymbol(
+                            iconName = MaterialSymbols.CHEVRON_RIGHT,
+                            contentDescription = if (showFullMonth) "Next month" else "Next week",
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    IconButton(
+                        onClick = { toggleViewMode() },
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        MaterialSymbol(
+                            iconName = if (showFullMonth) MaterialSymbols.CALENDAR_VIEW_WEEK else MaterialSymbols.CALENDAR_MONTH,
+                            contentDescription = if (showFullMonth) "Show week" else "Show full month",
                         )
                     }
                 }
-                IconButton(onClick = { stepPage(1) }, modifier = Modifier.size(36.dp)) {
-                    MaterialSymbol(
-                        iconName = MaterialSymbols.CHEVRON_RIGHT,
-                        contentDescription = if (showFullMonth) "Next month" else "Next week",
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                IconButton(
-                    onClick = { toggleViewMode() },
-                    modifier = Modifier.size(36.dp),
-                ) {
-                    MaterialSymbol(
-                        iconName = if (showFullMonth) MaterialSymbols.CALENDAR_VIEW_WEEK else MaterialSymbols.CALENDAR_MONTH,
-                        contentDescription = if (showFullMonth) "Show week" else "Show full month",
-                    )
-                }
-            }
 
-            Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(4.dp))
+            }
 
             Row(Modifier.fillMaxWidth()) {
                 daysOfWeek.forEach { dayOfWeek ->
@@ -236,10 +255,11 @@ fun RecommendationCalendar(
 
             Spacer(Modifier.height(4.dp))
 
-            val pagerModifier = Modifier
-                .fillMaxWidth()
-                .nestedScroll(consumeHorizontalScroll)
-                .testTag("calendar_pager")
+            val pagerModifier =
+                Modifier
+                    .fillMaxWidth()
+                    .nestedScroll(consumeHorizontalScroll)
+                    .testTag("calendar_pager")
 
             if (showFullMonth) {
                 HorizontalCalendar(
@@ -276,6 +296,7 @@ fun RecommendationCalendar(
 }
 
 @Composable
+@Suppress("LongParameterList") // day cell state is passed individually
 private fun CalendarDay(
     date: LocalDate,
     isSelected: Boolean,
@@ -290,37 +311,40 @@ private fun CalendarDay(
         label = "day_bg",
     )
     val textColor by animateColorAsState(
-        targetValue = when {
-            isSelected -> colors.onPrimary
-            isToday -> colors.primary
-            else -> colors.onSurface
-        },
+        targetValue =
+            when {
+                isSelected -> colors.onPrimary
+                isToday -> colors.primary
+                else -> colors.onSurface
+            },
         label = "day_text",
     )
-    val dotColor = when {
-        !hasForecast -> Color.Transparent
-        isSelected -> colors.onPrimary
-        else -> colors.primary
-    }
+    val dotColor =
+        when {
+            !hasForecast -> Color.Transparent
+            isSelected -> colors.onPrimary
+            else -> colors.primary
+        }
 
     Box(
         modifier = Modifier.fillMaxWidth().alpha(if (isEnabled) 1f else 0f),
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier
-                .padding(horizontal = 1.dp, vertical = 2.dp)
-                .size(36.dp)
-                .clip(CircleShape)
-                .background(backgroundColor)
-                .then(if (isToday && !isSelected) Modifier.border(BorderStroke(1.dp, colors.primary), CircleShape) else Modifier)
-                .semantics { selected = isSelected }
-                .clickable(
-                    enabled = isEnabled,
-                    role = Role.Button,
-                    onClickLabel = "Select ${date.formatted()}",
-                    onClick = onClick,
-                ),
+            modifier =
+                Modifier
+                    .padding(horizontal = 1.dp, vertical = 2.dp)
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(backgroundColor)
+                    .then(if (isToday && !isSelected) Modifier.border(BorderStroke(1.dp, colors.primary), CircleShape) else Modifier)
+                    .semantics { selected = isSelected }
+                    .clickable(
+                        enabled = isEnabled,
+                        role = Role.Button,
+                        onClickLabel = "Select ${date.formatted()}",
+                        onClick = onClick,
+                    ),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
@@ -339,5 +363,4 @@ private fun DayOfWeek.displayName(): String = name.lowercase().replaceFirstChar 
 
 private fun Month.displayName(): String = name.lowercase().replaceFirstChar { it.uppercase() }
 
-private fun LocalDate.formatted(): String =
-    "${dayOfWeek.displayName().take(3)} $day ${month.displayName()}"
+private fun LocalDate.formatted(): String = "${dayOfWeek.displayName().take(3)} $day ${month.displayName()}"

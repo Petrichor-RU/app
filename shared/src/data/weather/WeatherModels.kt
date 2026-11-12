@@ -3,8 +3,17 @@ package nl.petrichor.app.data.weather
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class Coordinates(val latitude: Double, val longitude: Double)
-data class Place(val name: String, val coordinates: Coordinates)
+data class Coordinates(
+    val latitude: Double,
+    val longitude: Double,
+)
+
+@Serializable // serialized into the saved_locations DataStore by SelectedLocationStore
+data class Place(
+    val name: String,
+    val coordinates: Coordinates,
+)
+
 data class WeatherSnapshot(
     val place: Place,
     val temperature: Int,
@@ -15,4 +24,10 @@ data class WeatherSnapshot(
     val windSpeed: Int,
     val forecast: List<ForecastDay>,
 )
-data class ForecastDay(val label: String, val min: Int, val max: Int, val icon: String)
+
+data class ForecastDay(
+    val label: String,
+    val min: Int,
+    val max: Int,
+    val icon: String,
+)

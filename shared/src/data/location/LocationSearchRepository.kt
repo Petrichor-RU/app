@@ -25,21 +25,25 @@ class LocationSearchRepository(
     private val client: HttpClient = weatherHttpClient(),
     private val apiKey: String = AppConfig.OPENWEATHER_API_KEY,
 ) {
-    suspend fun search(query: String): Result<List<LocationResult>> = runCatching {
-        require(apiKey.isNotBlank()) { "Add your OpenWeather API key to AppConfig.OpenWeatherApiKey." }
-        val response = client.get("${AppConfig.OPENWEATHER_API_BASE}/geo/1.0/direct") {
-            parameter("q", query)
-            parameter("limit", 5)
-            parameter("appid", apiKey)
-        }
-        json.decodeFromString<List<GeoDto>>(response.bodyAsText())
-            .map { dto ->
-                LocationResult(
-                    name = dto.name,
-                    region = listOfNotNull(dto.state, dto.country).joinToString(", "),
-                    coordinates = Coordinates(dto.lat, dto.lon),
-                )
+    suspend fun search(query: String): Result<List<LocationResult>> =
+        runCatching {
+            require(apiKey.isNotBlank()) {
+                "Add your OpenWeather API key to AppConfig.OPENWEATHER_API_KEY (see README)."
             }
-            .distinctBy { it.name to it.region }
-    }
+            val response =
+                client.get("${AppConfig.OPENWEATHER_API_BASE}/geo/1.0/direct") {
+                    parameter("q", query)
+                    parameter("limit", 5)
+                    parameter("appid", apiKey)
+                }
+            json
+                .decodeFromString<List<GeoDto>>(response.bodyAsText())
+                .map { dto ->
+                    LocationResult(
+                        name = dto.name,
+                        region = listOfNotNull(dto.state, dto.country).joinToString(", "),
+                        coordinates = Coordinates(dto.lat, dto.lon),
+                    )
+                }.distinctBy { it.name to it.region }
+        }
 }

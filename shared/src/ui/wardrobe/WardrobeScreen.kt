@@ -1,31 +1,32 @@
+@file:Suppress("MatchingDeclarationName") // hosts the screen and its view model per project convention
+
 package nl.petrichor.app.ui.wardrobe
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,25 +34,29 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
+import nl.petrichor.app.data.media.MediaStorage
 import nl.petrichor.app.data.wardrobe.ClothingPiece
-import nl.petrichor.app.data.wardrobe.ClothingImageStorage
 import nl.petrichor.app.data.wardrobe.WardrobeRepository
-
-import nl.petrichor.app.ui.BoxMessage
 import nl.petrichor.app.platform.BackHandler
+import nl.petrichor.app.ui.BoxMessage
 
 /**
  * The main wardrobe screen showing clothing items in a 2x2 grid
  */
+@Suppress("TooGenericExceptionCaught") // repository failures are surfaced as snackbars, so any exception is handled
 class WardrobeViewModel : ViewModel() {
     private val repository = WardrobeRepository()
     val allClothing = repository.getAllClothing()
@@ -68,61 +73,89 @@ class WardrobeViewModel : ViewModel() {
         _snackbarMessage.value = null
     }
 
-    suspend fun addClothing(clothing: ClothingPiece): Boolean {
-        return try {
+    suspend fun addClothing(clothing: ClothingPiece): Boolean =
+        try {
             repository.addClothing(clothing)
             showSnackbar("Clothing item added!")
             true
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
+            if (exception is CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
             showSnackbar("Could not add clothing item: ${exception.message ?: "Unknown error"}")
             false
         }
-    }
 
-    fun deleteClothing(clothing: ClothingPiece) = viewModelScope.launch {
+    fun markLaundry(
+        pieceId: Long,
+        days: Int,
+    ) = viewModelScope.launch {
         try {
-            repository.deleteClothing(clothing)
-            ClothingImageStorage.deleteImage(clothing.imagePath)
-            showSnackbar("Clothing item deleted!")
+            repository.markLaundry(pieceId, days)
+            showSnackbar("Marked in laundry for $days day${if (days == 1) "" else "s"}.")
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            showSnackbar("Could not delete clothing item: ${exception.message ?: "Unknown error"}")
+            if (exception is CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
+            showSnackbar("Could not mark laundry: ${exception.message ?: "Unknown error"}")
         }
     }
 
-    suspend fun updateClothing(previous: ClothingPiece, clothing: ClothingPiece): Boolean {
-        return try {
+    fun deleteClothing(clothing: ClothingPiece) =
+        viewModelScope.launch {
+            try {
+                // Linked pieces are archived silently (image kept for the journal);
+                // unlinked pieces are hard-deleted with their image inside the repository.
+                repository.deletePieceWithArchive(clothing)
+                showSnackbar("Clothing item deleted!")
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (exception is CancellationException) {
+                    currentCoroutineContext().ensureActive()
+                }
+                showSnackbar("Could not delete clothing item: ${exception.message ?: "Unknown error"}")
+            }
+        }
+
+    suspend fun updateClothing(
+        previous: ClothingPiece,
+        clothing: ClothingPiece,
+    ): Boolean =
+        try {
             repository.updateClothing(clothing)
             if (previous.imagePath != clothing.imagePath) {
-                ClothingImageStorage.deleteImage(previous.imagePath)
+                MediaStorage.deleteImage(previous.imagePath)
             }
             showSnackbar("Clothing item updated!")
             true
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
+            if (exception is CancellationException) {
+                currentCoroutineContext().ensureActive()
+            }
             showSnackbar("Could not update clothing item: ${exception.message ?: "Unknown error"}")
             false
         }
-    }
 }
 
 @Composable
-fun WardrobeScreen(
-    modifier: Modifier = Modifier
-) {
+@Suppress("LongMethod", "CyclomaticComplexMethod") // screen owns all wardrobe state per project convention
+fun WardrobeScreen(modifier: Modifier = Modifier) {
     if (LocalInspectionMode.current) {
         BoxMessage(
             message = "Wardrobe preview",
-            modifier = modifier.fillMaxSize()
+            modifier = modifier.fillMaxSize(),
         )
         return
     }
 
-    val viewModel = remember { WardrobeViewModel() }
+    val viewModel = viewModel { WardrobeViewModel() }
     val allClothing by viewModel.allClothing.collectAsStateWithLifecycle(emptyList())
     val clothingTypes by viewModel.clothingTypes.collectAsStateWithLifecycle(emptyList())
     var selectedTypeId by remember { mutableStateOf<Long?>(null) }
@@ -134,15 +167,16 @@ fun WardrobeScreen(
     var animateDetail by rememberSaveable { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
-    val detailTransition = remember(selectedClothingId) {
-        MutableTransitionState(!animateDetail)
-    }
+    val detailTransition =
+        remember(selectedClothingId) {
+            MutableTransitionState(!animateDetail)
+        }
     detailTransition.targetState = showDetailDialog && selectedClothing != null
     LaunchedEffect(
         detailTransition.currentState,
         detailTransition.isIdle,
         selectedClothingId,
-        showDetailDialog
+        showDetailDialog,
     ) {
         if (!detailTransition.isIdle || selectedClothingId == null) {
             return@LaunchedEffect
@@ -168,7 +202,7 @@ fun WardrobeScreen(
             enabled = showDetailDialog && !showEditDialog,
             onBack = {
                 showDetailDialog = false
-            }
+            },
         )
 
         Scaffold(
@@ -179,30 +213,32 @@ fun WardrobeScreen(
             floatingActionButton = {
                 if (!showDetailDialog) {
                     FloatingActionButton(
-                        onClick = { showAddDialog = true }
+                        onClick = { showAddDialog = true },
                     ) {
                         MaterialSymbol(
                             iconName = MaterialSymbols.ADD,
-                            contentDescription = "Add clothing"
+                            contentDescription = "Add clothing",
                         )
                     }
                 }
-            }
+            },
         ) { paddingValues ->
-            val filteredClothing = if (selectedTypeId == null) {
-                allClothing
-            } else {
-                allClothing.filter { it.typeId == selectedTypeId }
-            }
+            val filteredClothing =
+                if (selectedTypeId == null) {
+                    allClothing
+                } else {
+                    allClothing.filter { it.typeId == selectedTypeId }
+                }
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
                 contentPadding = PaddingValues(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     WardrobeFilterBar(
@@ -210,7 +246,7 @@ fun WardrobeScreen(
                         onTypeSelected = { typeId ->
                             selectedTypeId = typeId
                         },
-                        modifier = Modifier.statusBarsPadding()
+                        modifier = Modifier.statusBarsPadding(),
                     )
                 }
 
@@ -218,14 +254,14 @@ fun WardrobeScreen(
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         BoxMessage(
                             message = "Your wardrobe is empty. Add your first clothing item!",
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 } else if (filteredClothing.isEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         BoxMessage(
                             message = "No items found for this type.",
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 } else {
@@ -237,7 +273,7 @@ fun WardrobeScreen(
                                 animateDetail = true
                                 showDetailDialog = true
                             },
-                            modifier = Modifier.aspectRatio(1f)
+                            modifier = Modifier.aspectRatio(1f),
                         )
                     }
                 }
@@ -248,19 +284,23 @@ fun WardrobeScreen(
             clothingTypes.firstOrNull { it.id == clothing.typeId }?.let { clothingType ->
                 AnimatedVisibility(
                     visibleState = detailTransition,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .zIndex(1f),
-                    enter = slideInVertically(
-                        initialOffsetY = { fullHeight -> fullHeight }
-                    ) + fadeIn(),
-                    exit = slideOutVertically(
-                        targetOffsetY = { fullHeight -> fullHeight }
-                    ) + fadeOut()
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .zIndex(1f),
+                    enter =
+                        slideInVertically(
+                            initialOffsetY = { fullHeight -> fullHeight },
+                        ) + fadeIn(),
+                    exit =
+                        slideOutVertically(
+                            targetOffsetY = { fullHeight -> fullHeight },
+                        ) + fadeOut(),
                 ) {
                     ClothingDetailScreen(
                         clothing = clothing,
                         clothingType = clothingType,
+                        laundryUntilEpochMs = clothing.laundryUntilEpochMs,
                         modifier = Modifier.fillMaxSize().statusBarsPadding(),
                         onDismiss = { showDetailDialog = false },
                         onEdit = { showEditDialog = true },
@@ -268,7 +308,8 @@ fun WardrobeScreen(
                             closingClothing = deletedClothing
                             viewModel.deleteClothing(deletedClothing)
                             showDetailDialog = false
-                        }
+                        },
+                        onMarkLaundry = { days -> viewModel.markLaundry(clothing.id, days) },
                     )
                 }
             }
@@ -284,7 +325,7 @@ fun WardrobeScreen(
                     if (viewModel.addClothing(clothing)) {
                         showAddDialog = false
                     }
-                }
+                },
             )
         }
 
@@ -299,7 +340,7 @@ fun WardrobeScreen(
                     if (viewModel.updateClothing(selectedClothing, updatedClothing)) {
                         showEditDialog = false
                     }
-                }
+                },
             )
         }
     }

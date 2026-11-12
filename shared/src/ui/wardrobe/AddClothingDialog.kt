@@ -1,7 +1,7 @@
 package nl.petrichor.app.ui.wardrobe
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -21,13 +22,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.Button
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,30 +36,32 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import nl.petrichor.app.data.wardrobe.ClothingPiece
-import nl.petrichor.app.data.wardrobe.ClothingImageStorage
-import nl.petrichor.app.data.wardrobe.ClothingType
-import nl.petrichor.app.data.wardrobe.Material
-import nl.petrichor.app.data.wardrobe.loadClothingImagePainter
-import nl.petrichor.app.platform.isCameraAvailable
-import nl.petrichor.app.platform.isImageCropAvailable
 import io.github.ismoy.imagepickerkmp.config.CropConfig
 import io.github.ismoy.imagepickerkmp.config.GalleryConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerKMPConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerResult
 import io.github.ismoy.imagepickerkmp.picker.rememberImagePickerKMP
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import nl.petrichor.app.data.media.MediaStorage
+import nl.petrichor.app.data.media.loadImagePainter
+import nl.petrichor.app.data.wardrobe.ClothingPiece
+import nl.petrichor.app.data.wardrobe.ClothingType
+import nl.petrichor.app.data.wardrobe.Material
+import nl.petrichor.app.platform.isCameraAvailable
 
 /**
  * Dialog for adding/editing clothing items
  * @param clothing Existing clothing item for edit mode, null for add mode
  */
 @Composable
+@Suppress("LongMethod", "CyclomaticComplexMethod", "TooGenericExceptionCaught") // any save failure keeps the dialog open
 fun AddClothingDialog(
     clothing: ClothingPiece? = null,
     clothingTypes: List<ClothingType>,
     onDismiss: () -> Unit,
-    onSave: suspend (ClothingPiece) -> Unit
+    onSave: suspend (ClothingPiece) -> Unit,
 ) {
     // Use existing clothing data; a type must be selected for new items.
     val isEditing = clothing != null
@@ -76,306 +78,338 @@ fun AddClothingDialog(
     var useNewImage by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 
-    val imagePicker = rememberImagePickerKMP(
-        ImagePickerKMPConfig(
-            galleryConfig = GalleryConfig(allowMultiple = false),
-            cropConfig = CropConfig(
-                enabled = isImageCropAvailable,
-                squareCrop = true,
-                circularCrop = false
-            )
+    val imagePicker =
+        rememberImagePickerKMP(
+            ImagePickerKMPConfig(
+                galleryConfig = GalleryConfig(allowMultiple = false),
+                // ImagePickerKMP rotate/crop is disabled everywhere (plan decision 20).
+                cropConfig =
+                    CropConfig(
+                        enabled = false,
+                        squareCrop = true,
+                        circularCrop = false,
+                    ),
+            ),
         )
-    )
     val selectedPhoto = (imagePicker.result as? ImagePickerResult.Success)?.first
     var selectedPhotoPainter by remember { mutableStateOf<Painter?>(null) }
 
     LaunchedEffect(selectedPhoto, useNewImage) {
-        selectedPhotoPainter = if (useNewImage && selectedPhoto != null) {
-            ClothingImageStorage.loadPhotoPainter(selectedPhoto)
-        } else {
-            null
-        }
+        selectedPhotoPainter =
+            if (useNewImage && selectedPhoto != null) {
+                MediaStorage.loadPhotoPainter(selectedPhoto)
+            } else {
+                null
+            }
     }
 
     // Determine current image
-    val currentImagePath = if (useNewImage && selectedPhoto != null) {
-        null // Will use the new image from picker
-    } else {
-        clothing?.imagePath
-    }
+    val currentImagePath =
+        if (useNewImage && selectedPhoto != null) {
+            null // Will use the new image from picker
+        } else {
+            clothing?.imagePath
+        }
 
     AlertDialog(
-            onDismissRequest = {  },
-            title = { Text(if (isEditing) "Edit Clothing Item" else "Add Clothing Item") },
-            text = {
-                Column(
-                    modifier = Modifier
+        onDismissRequest = { },
+        title = { Text(if (isEditing) "Edit Clothing Item" else "Add Clothing Item") },
+        text = {
+            Column(
+                modifier =
+                    Modifier
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Image preview
-                    Box(
-                        modifier = Modifier
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                // Image preview
+                Box(
+                    modifier =
+                        Modifier
                             .fillMaxWidth()
                             .height(150.dp)
                             .background(Color.LightGray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        when {
-                            selectedPhoto != null && useNewImage -> {
-                                selectedPhotoPainter?.let { painter ->
-                                    Image(
-                                        painter = painter,
-                                        contentDescription = "New clothing photo",
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                }
-                            }
-                            currentImagePath?.isNotEmpty() == true -> {
-                                val painter = currentImagePath.let {
-                                    loadClothingImagePainter(it)
-                                }
-                                if (painter != null) {
-                                    Image(
-                                        painter = painter,
-                                        contentDescription = "Current clothing photo",
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                } else {
-                                    MaterialSymbol(
-                                        iconName = MaterialSymbols.IMAGE,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                }
-                            }
-                            else -> {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    MaterialSymbol(
-                                        iconName = MaterialSymbols.IMAGE,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(48.dp)
-                                    )
-                                    Text("Add a clothing photo", color = Color.Gray)
-                                }
-                            }
-                        }
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                useNewImage = true
-                                imagePicker.launchGallery()
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Gallery") }
-                        Button(
-                            onClick = {
-                                useNewImage = true
-                                imagePicker.launchCamera()
-                            },
-                            enabled = isCameraAvailable(),
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Camera") }
-                    }
-
-                    // Option to keep current image (only for editing existing items with images)
-                    if (isEditing && clothing.imagePath.isNotEmpty()) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Keep current image")
-                            IconButton(
-                                onClick = { useNewImage = false }
-                            ) {
-                                MaterialSymbol(
-                                    iconName = if (useNewImage) MaterialSymbols.RADIO_BUTTON_UNCHECKED else MaterialSymbols.CHECK_CIRCLE,
-                                    contentDescription = "Keep current image"
+                    contentAlignment = Alignment.Center,
+                ) {
+                    when {
+                        selectedPhoto != null && useNewImage -> {
+                            selectedPhotoPainter?.let { painter ->
+                                Image(
+                                    painter = painter,
+                                    contentDescription = "New clothing photo",
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                         }
-                    }
 
-                    when (val result = imagePicker.result) {
-                        is ImagePickerResult.Error ->
-                            Text(
-                                text = "Could not select image: ${result.exception.message ?: "Unknown error"}",
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        is ImagePickerResult.Loading -> CircularProgressIndicator(Modifier.size(20.dp))
-                        else -> Unit
-                    }
-                    saveError?.let { error ->
-                        Text(error, color = MaterialTheme.colorScheme.error)
-                    }
+                        currentImagePath?.isNotEmpty() == true -> {
+                            val painter =
+                                currentImagePath.let {
+                                    loadImagePainter(it)
+                                }
+                            if (painter != null) {
+                                Image(
+                                    painter = painter,
+                                    contentDescription = "Current clothing photo",
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            } else {
+                                MaterialSymbol(
+                                    iconName = MaterialSymbols.IMAGE,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                )
+                            }
+                        }
 
-                    // Name field
-                    OutlinedTextField(
-                        value = name,
-                        onValueChange = { name = it },
-                        label = { Text("Name (optional)") },
+                        else -> {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                MaterialSymbol(
+                                    iconName = MaterialSymbols.IMAGE,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                )
+                                Text("Add a clothing photo", color = Color.Gray)
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = {
+                            useNewImage = true
+                            imagePicker.launchGallery()
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Gallery") }
+                    Button(
+                        onClick = {
+                            useNewImage = true
+                            imagePicker.launchCamera()
+                        },
+                        enabled = isCameraAvailable(),
+                        modifier = Modifier.weight(1f),
+                    ) { Text("Camera") }
+                }
+
+                // Option to keep current image (only for editing existing items with images)
+                if (isEditing && clothing.imagePath.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    ) {
+                        Text("Keep current image")
+                        IconButton(
+                            onClick = { useNewImage = false },
+                        ) {
+                            MaterialSymbol(
+                                iconName = if (useNewImage) MaterialSymbols.RADIO_BUTTON_UNCHECKED else MaterialSymbols.CHECK_CIRCLE,
+                                contentDescription = "Keep current image",
+                            )
+                        }
+                    }
+                }
 
-                    // Type selection with dropdown
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("Type (required):", style = MaterialTheme.typography.bodySmall)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable {
+                when (val result = imagePicker.result) {
+                    is ImagePickerResult.Error -> {
+                        Text(
+                            text = "Could not select image: ${result.exception.message ?: "Unknown error"}",
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+
+                    is ImagePickerResult.Loading -> {
+                        CircularProgressIndicator(Modifier.size(20.dp))
+                    }
+
+                    else -> {}
+                }
+                saveError?.let { error ->
+                    Text(error, color = MaterialTheme.colorScheme.error)
+                }
+
+                // Name field
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                )
+
+                // Type selection with dropdown
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Type (required):", style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier.fillMaxWidth().clickable {
                                 showTypeMenu = true
                             },
-                        ) {
-                            Text(
-                                text = clothingTypes.firstOrNull { it.id == selectedTypeId }?.name
+                    ) {
+                        Text(
+                            text =
+                                clothingTypes.firstOrNull { it.id == selectedTypeId }?.name
                                     ?: "Select type (required)",
-                                modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { showTypeMenu = true }) {
+                            MaterialSymbol(
+                                iconName = MaterialSymbols.ARROW_DROP_DOWN,
+                                contentDescription = "Select type",
                             )
-                            IconButton(onClick = { showTypeMenu = true }) {
-                                MaterialSymbol(
-                                    iconName = MaterialSymbols.ARROW_DROP_DOWN,
-                                    contentDescription = "Select type"
-                                )
-                            }
+                        }
 
-                            DropdownMenu(
-                                expanded = showTypeMenu,
-                                onDismissRequest = { showTypeMenu = false }
-                            ) {
-                                clothingTypes.forEach { type ->
-                                    DropdownMenuItem(
-                                        text = { Text(type.name) },
-                                        onClick = {
-                                            selectedTypeId = type.id
-                                            showTypeMenu = false
-                                        }
-                                    )
-                                }
+                        DropdownMenu(
+                            expanded = showTypeMenu,
+                            onDismissRequest = { showTypeMenu = false },
+                        ) {
+                            clothingTypes.forEach { type ->
+                                DropdownMenuItem(
+                                    text = { Text(type.name) },
+                                    onClick = {
+                                        selectedTypeId = type.id
+                                        showTypeMenu = false
+                                    },
+                                )
                             }
                         }
                     }
+                }
 
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("Material (optional):", style = MaterialTheme.typography.bodySmall)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.fillMaxWidth().clickable {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Material (optional):", style = MaterialTheme.typography.bodySmall)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier =
+                            Modifier.fillMaxWidth().clickable {
                                 showMaterialMenu = true
                             },
-                        ) {
-                            Text(
-                                text = selectedMaterial?.displayName ?: "Not selected",
-                                modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            text = selectedMaterial?.displayName ?: "Not selected",
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = { showMaterialMenu = true }) {
+                            MaterialSymbol(
+                                iconName = MaterialSymbols.ARROW_DROP_DOWN,
+                                contentDescription = "Select material",
                             )
-                            IconButton(onClick = { showMaterialMenu = true }) {
-                                MaterialSymbol(
-                                    iconName = MaterialSymbols.ARROW_DROP_DOWN,
-                                    contentDescription = "Select material"
-                                )
-                            }
-                            DropdownMenu(
-                                expanded = showMaterialMenu,
-                                onDismissRequest = { showMaterialMenu = false }
-                            ) {
+                        }
+                        DropdownMenu(
+                            expanded = showMaterialMenu,
+                            onDismissRequest = { showMaterialMenu = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Not selected") },
+                                onClick = {
+                                    selectedMaterial = null
+                                    showMaterialMenu = false
+                                },
+                            )
+                            Material.entries.filter { it != Material.UNKNOWN }.forEach { material ->
                                 DropdownMenuItem(
-                                    text = { Text("Not selected") },
+                                    text = { Text(material.displayName) },
                                     onClick = {
-                                        selectedMaterial = null
+                                        selectedMaterial = material
                                         showMaterialMenu = false
-                                    }
+                                    },
                                 )
-                                Material.entries.filter { it != Material.UNKNOWN }.forEach { material ->
-                                    DropdownMenuItem(
-                                        text = { Text(material.displayName) },
-                                        onClick = {
-                                            selectedMaterial = material
-                                            showMaterialMenu = false
-                                        }
-                                    )
-                                }
                             }
                         }
                     }
-
-                    // Notes field
-                    OutlinedTextField(
-                        value = notes,
-                        onValueChange = { notes = it },
-                        label = { Text("Notes (optional)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 3,
-                        maxLines = 5
-                    )
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val typeId = selectedTypeId ?: run {
+
+                // Notes field
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label = { Text("Notes (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    maxLines = 5,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val typeId =
+                        selectedTypeId ?: run {
                             saveError = "Please select a clothing type."
                             return@TextButton
                         }
-                        isSaving = true
-                        saveError = null
-                        coroutineScope.launch {
-                            try {
-                                val imagePath = when {
+                    isSaving = true
+                    saveError = null
+                    coroutineScope.launch {
+                        try {
+                            val imagePath =
+                                when {
                                     useNewImage && selectedPhoto != null -> {
-                                        ClothingImageStorage.copyToPermanentStorage(selectedPhoto)
+                                        MediaStorage.copyToPermanentStorage(selectedPhoto)
                                     }
-                                    isEditing && !useNewImage -> clothing.imagePath
-                                    else -> selectedPhoto?.let {
-                                        ClothingImageStorage.copyToPermanentStorage(it)
-                                    }.orEmpty()
+
+                                    isEditing && !useNewImage -> {
+                                        clothing.imagePath
+                                    }
+
+                                    else -> {
+                                        selectedPhoto
+                                            ?.let {
+                                                MediaStorage.copyToPermanentStorage(it)
+                                            }.orEmpty()
+                                    }
                                 }
 
-                                onSave(
-                                    (clothing ?: ClothingPiece(
+                            onSave(
+                                (
+                                    clothing ?: ClothingPiece(
                                         name = null,
                                         typeId = typeId,
                                         material = Material.UNKNOWN,
                                         notes = null,
                                         imagePath = "",
-                                        thumbnailPath = ""
-                                    )).copy(
-                                        name = name.ifEmpty { null },
-                                        typeId = typeId,
-                                        material = selectedMaterial ?: Material.UNKNOWN,
-                                        notes = notes.ifEmpty { null },
-                                        imagePath = imagePath,
-                                        thumbnailPath = imagePath
+                                        thumbnailPath = "",
                                     )
-                                )
-                                isSaving = false
-                            } catch (exception: Exception) {
-                                saveError = "Could not save clothing image: ${exception.message ?: "Unknown error"}"
-                                isSaving = false
+                                ).copy(
+                                    name = name.ifEmpty { null },
+                                    typeId = typeId,
+                                    material = selectedMaterial ?: Material.UNKNOWN,
+                                    notes = notes.ifEmpty { null },
+                                    imagePath = imagePath,
+                                    thumbnailPath = imagePath,
+                                ),
+                            )
+                            isSaving = false
+                        } catch (exception: Exception) {
+                            if (exception is CancellationException) {
+                                ensureActive()
                             }
+                            saveError = "Could not save clothing image: ${exception.message ?: "Unknown error"}"
+                            isSaving = false
                         }
-                    },
-                    enabled = !isSaving && selectedTypeId != null
-                ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(Modifier.size(20.dp))
-                    } else {
-                        Text(if (isEditing) "Save Changes" else "Save")
                     }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = onDismiss,
-                    enabled = !isSaving
-                ) {
-                    Text("Cancel")
+                },
+                enabled = !isSaving && selectedTypeId != null,
+            ) {
+                if (isSaving) {
+                    CircularProgressIndicator(Modifier.size(20.dp))
+                } else {
+                    Text(if (isEditing) "Save Changes" else "Save")
                 }
             }
-        )
-    }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSaving,
+            ) {
+                Text("Cancel")
+            }
+        },
+    )
+}
