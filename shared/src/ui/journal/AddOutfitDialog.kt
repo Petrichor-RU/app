@@ -36,8 +36,6 @@ import io.github.ismoy.imagepickerkmp.picker.ImagePickerKMPConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerResult
 import io.github.ismoy.imagepickerkmp.picker.rememberImagePickerKMP
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -397,10 +395,9 @@ private suspend fun saveOutfit(
                 state.notes.ifEmpty { null },
                 params.wardrobePieces.filter { it.id in state.selectedPieceIds },
             )
+        } catch (exception: CancellationException) {
+            throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             state.saveError = "Could not save the outfit image: ${exception.message ?: "Unknown error"}"
             false
         }

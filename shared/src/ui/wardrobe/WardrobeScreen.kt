@@ -44,8 +44,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.media.MediaStorage
 import nl.petrichor.app.data.wardrobe.ClothingPiece
@@ -81,9 +79,6 @@ class WardrobeViewModel : ViewModel() {
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             showSnackbar("Could not add clothing item: ${exception.message ?: "Unknown error"}")
             false
         }
@@ -98,9 +93,6 @@ class WardrobeViewModel : ViewModel() {
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             showSnackbar("Could not mark laundry: ${exception.message ?: "Unknown error"}")
         }
     }
@@ -115,9 +107,6 @@ class WardrobeViewModel : ViewModel() {
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                if (exception is CancellationException) {
-                    currentCoroutineContext().ensureActive()
-                }
                 showSnackbar("Could not delete clothing item: ${exception.message ?: "Unknown error"}")
             }
         }
@@ -136,9 +125,6 @@ class WardrobeViewModel : ViewModel() {
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             showSnackbar("Could not update clothing item: ${exception.message ?: "Unknown error"}")
             false
         }

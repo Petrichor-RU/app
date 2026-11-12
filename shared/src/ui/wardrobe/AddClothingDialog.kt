@@ -42,7 +42,6 @@ import io.github.ismoy.imagepickerkmp.picker.ImagePickerKMPConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerResult
 import io.github.ismoy.imagepickerkmp.picker.rememberImagePickerKMP
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.media.MediaStorage
 import nl.petrichor.app.data.media.loadImagePainter
@@ -385,10 +384,9 @@ fun AddClothingDialog(
                                 ),
                             )
                             isSaving = false
+                        } catch (exception: CancellationException) {
+                            throw exception
                         } catch (exception: Exception) {
-                            if (exception is CancellationException) {
-                                ensureActive()
-                            }
                             saveError = "Could not save clothing image: ${exception.message ?: "Unknown error"}"
                             isSaving = false
                         }

@@ -6,8 +6,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -67,9 +65,6 @@ class JournalViewModel(
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             showSnackbar("Could not log outfit: ${exception.message ?: "Unknown error"}")
             null
         }
@@ -89,9 +84,6 @@ class JournalViewModel(
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             showSnackbar("Could not update outfit: ${exception.message ?: "Unknown error"}")
             false
         }
@@ -108,9 +100,6 @@ class JournalViewModel(
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             showSnackbar("Could not save survey: ${exception.message ?: "Unknown error"}")
             false
         }
@@ -123,9 +112,6 @@ class JournalViewModel(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                if (exception is CancellationException) {
-                    currentCoroutineContext().ensureActive()
-                }
                 showSnackbar("Could not delete entry: ${exception.message ?: "Unknown error"}")
             }
         }
@@ -140,9 +126,6 @@ class JournalViewModel(
         } catch (exception: CancellationException) {
             throw exception
         } catch (exception: Exception) {
-            if (exception is CancellationException) {
-                currentCoroutineContext().ensureActive()
-            }
             showSnackbar("Could not mark laundry: ${exception.message ?: "Unknown error"}")
         }
     }

@@ -11,12 +11,12 @@ import android.util.LruCache
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.painter.Painter
+import androidx.core.net.toUri
 import io.github.ismoy.imagepickerkmp.extensions.loadBytes
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
-import androidx.core.net.toUri
 
 /** Decoded painters are cached so scrolling does not re-decode every image. */
 private val painterCache = LruCache<String, Painter>(50)

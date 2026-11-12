@@ -19,3 +19,12 @@ For the wardrobe feature:
 - `WardrobeRepository` is the business boundary around `ClothingDao`: new items receive a timestamp, existing timestamps are preserved, built-in types are inserted on the first type-flow collection, and mutations are dispatched off the UI thread.
 - Keep wardrobe data/repository tests in `shared/test/data/wardrobe`. Use fakes for `ClothingDao` so tests do not depend on platform Room drivers, image picker state, or permanent image storage. UI tests should assert user-visible semantics and callbacks; animation timing and platform image selection are integration concerns.
 - JVM Compose UI tests live in `shared/test@jvm/ui/wardrobe` and use `runDesktopComposeUiTest`. The JVM test target needs `$compose.uiTest` plus the Linux Skiko runtime; wrap wardrobe UI content in `MaterialSymbolsRenderingScope` for the test environment because the production scope remains app-wide in `App.kt`.
+
+For the weather feature UI:
+- `WeatherScreen` renders the main weather screen which shows the weather for the picked location.
+- `WeatherContent` (private, inside `WeatherScreen.kt`) renders the weather information for the main weather screen.
+- `LocationPicker` renders the location picker UI from which the user can search new locations or pick one of the saved locations to see the weather for.
+- `LocationPickerController` handles actions for search box, adding or removing the saved locations and moving the saved locations.
+- `LocationHeader` renders the area which shows the current location and which the user can press to choose a different location.
+- `LocationListItem` handles the rendering for a location item which the user can select or which the user can save or delete.
+
