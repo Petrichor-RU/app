@@ -14,7 +14,6 @@ import androidx.compose.ui.graphics.painter.Painter
 import androidx.core.net.toUri
 import io.github.ismoy.imagepickerkmp.extensions.loadBytes
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 
@@ -56,14 +55,14 @@ internal actual suspend fun saveMediaImage(
     val directory = File(applicationContext().filesDir, scope.directoryName).apply { mkdirs() }
     val sourceBytes = readImageBytes(photo.uri) ?: photo.loadBytes()
     check(sourceBytes.isNotEmpty()) { "Selected image contains no data." }
-    // Rotate the pixels according to the EXIF orientation and re-encode the image:
-    // the re-encoded output carries no EXIF, so the orientation tag is stripped and
-    // every loader sees an upright image.
-    val preferPng = extension.equals("png", ignoreCase = true)
-    val normalized = normalizeImageBytes(sourceBytes, preferPng)
-    val storedExtension = if (preferPng) "png" else "jpg"
+    // Store the picked bytes verbatim, keeping the EXIF orientation tag. The tag is
+    // applied exactly once, at load time (see loadExifOrientedPainter); re-encoding
+    // here would risk dropping the tag without rotating (or rotating twice), which
+    // is what made freshly taken camera photos render upside down.
+    val storedExtension =
+        extension.lowercase().takeIf { it in setOf("jpg", "jpeg", "png", "webp", "heic") } ?: "jpg"
     val file = File(directory, "image_${System.currentTimeMillis()}.$storedExtension")
-    file.writeBytes(normalized)
+    file.writeBytes(sourceBytes)
     return file.absolutePath
 }
 
@@ -78,20 +77,6 @@ internal actual fun imageUriForLoading(path: String): String = path
 internal actual fun loadImagePainter(path: String): Painter? = loadExifOrientedPainter(imageUriForLoading(path))
 
 internal actual suspend fun loadPickedPhotoPainter(photo: PhotoResult): Painter? = loadExifOrientedPainter(photo.uri)
-
-private fun normalizeImageBytes(
-    bytes: ByteArray,
-    preferPng: Boolean,
-): ByteArray {
-    val decoded = decodeDownsampled(bytes) ?: return bytes
-    val rotated = applyExifTransform(decoded, exifOrientationOf(bytes))
-    if (rotated !== decoded) decoded.recycle()
-    return ByteArrayOutputStream().use { out ->
-        val format = if (preferPng) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-        rotated.compress(format, STORED_IMAGE_JPEG_QUALITY, out)
-        out.toByteArray()
-    }
-}
 
 private fun loadExifOrientedPainter(uri: String): Painter? =
     painterCache.get(uri)
@@ -145,7 +130,14 @@ private fun readImageBytes(uri: String): ByteArray? =
 
 private fun openImageStream(uri: String): InputStream? =
     when {
-        uri.startsWith("content://") || uri.startsWith("file://") -> {
+        // Read our own files directly: going through the content resolver for
+        // file:// URIs can fail on some devices, which would drop us onto the
+        // picker's re-encoding loadBytes() path that strips the EXIF tag.
+        uri.startsWith("file://") -> {
+            File(uri.toUri().path.orEmpty()).inputStream()
+        }
+
+        uri.startsWith("content://") -> {
             applicationContext().contentResolver.openInputStream(uri.toUri())
         }
 

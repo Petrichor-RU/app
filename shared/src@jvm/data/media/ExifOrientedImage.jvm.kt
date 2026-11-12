@@ -36,7 +36,7 @@ internal fun decodeExifOrientedImagePainter(bytes: ByteArray): Painter {
     return BitmapPainter(upright.toComposeImageBitmap())
 }
 
-private fun drawUpright(
+internal fun drawUpright(
     image: Image,
     transform: ExifTransform?,
 ): Image {
