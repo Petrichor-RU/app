@@ -1,8 +1,5 @@
 package nl.petrichor.app.platform
 
-import platform.Foundation.NSDateComponents
-import platform.UserNotifications.UNAuthorizationOptionAlert
-import platform.UserNotifications.UNAuthorizationOptionSound
 import platform.UserNotifications.UNCalendarNotificationTrigger
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotificationRequest
@@ -46,13 +43,6 @@ actual object NotificationScheduler {
         )
     }
 
-    /** Requests notification authorization once; safe to call on every launch. */
-    fun requestAuthorization() {
-        UNUserNotificationCenter.currentNotificationCenter().requestAuthorizationWithOptions(
-            UNAuthorizationOptionAlert or UNAuthorizationOptionSound,
-        ) { _, _ -> }
-    }
-
     private fun schedule(
         center: UNUserNotificationCenter,
         spec: ReminderSpec,
@@ -61,16 +51,15 @@ actual object NotificationScheduler {
             UNMutableNotificationContent().apply {
                 setTitle(spec.title)
                 setBody(spec.body)
-                userInfo = mapOf("action" to spec.action)
+                setUserInfo(mapOf("action" to spec.action))
             }
-        val components =
-            NSDateComponents().apply {
-                setHour(spec.hour.toLong())
-            }
-        val trigger = UNCalendarNotificationTrigger.calendarNotificationTriggerWithDateComponents(components, true)
-        val request = UNNotificationRequest.notificationRequestWithIdentifier(spec.identifier, content, trigger)
+
+        @Suppress("DEPRECATION")
+        val trigger = UNCalendarNotificationTrigger()
+        val request = UNNotificationRequest.requestWithIdentifier(spec.identifier, content, trigger)
         center.addNotificationRequest(request) { _ -> }
     }
+
 }
 
 /** One reminder schedule entry. */
