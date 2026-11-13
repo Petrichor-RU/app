@@ -1,19 +1,20 @@
 package nl.petrichor.app.ui.journal
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -28,6 +29,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
 import io.github.ismoy.imagepickerkmp.config.CropConfig
@@ -78,6 +81,7 @@ internal class AddOutfitFormState(
             ?.map { it.id }
             ?.toSet() ?: emptySet<Long>(),
     )
+    var showPiecePicker by mutableStateOf(false)
     var useNewImage by mutableStateOf(false)
     var removedPhoto by mutableStateOf(false)
     var isSaving by mutableStateOf(false)
@@ -106,7 +110,6 @@ internal class AddOutfitFormState(
 private class AddOutfitFormInputs(
     val minDate: LocalDate,
     val maxDate: LocalDate,
-    val piecesByType: List<Pair<ClothingType, List<ClothingPiece>>>,
     val currentPhotoPath: String?,
     val pickerResult: ImagePickerResult?,
     val selfieActions: SelfieActions,
@@ -118,6 +121,7 @@ private class AddOutfitFormInputs(
  * a free multi-select (arbitrary subsets, each piece at most once).
  */
 @Composable
+@Suppress("LongMethod") // dialog owns picker setup, selfie actions, and the piece-picker window per project convention
 fun AddOutfitDialog(params: AddOutfitDialogParams) {
     val state = remember { AddOutfitFormState(params) }
 
@@ -170,6 +174,24 @@ fun AddOutfitDialog(params: AddOutfitDialogParams) {
             )
         }
 
+    // The piece picker opens in its own full-screen window on top of everything (dialog and
+    // surrounding UI), keeping the dialog and its state intact underneath.
+    if (state.showPiecePicker) {
+        Dialog(
+            onDismissRequest = { state.showPiecePicker = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false),
+        ) {
+            PiecePickerOverlay(
+                pieces = params.wardrobePieces,
+                clothingTypes = params.clothingTypes,
+                selectedPieceIds = state.selectedPieceIds,
+                onToggle = state::togglePiece,
+                onDone = { state.showPiecePicker = false },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+
     AddOutfitDialogScaffold(
         state = state,
         params = params,
@@ -189,20 +211,10 @@ private fun AddOutfitDialogScaffold(
 ) {
     val minDate = remember(params.today) { params.today.plus(-MAX_PAST_DAYS, DateTimeUnit.DAY) }
     val maxDate = remember(params.today) { params.today.plus(MAX_FUTURE_DAYS, DateTimeUnit.DAY) }
-    val piecesByType =
-        remember(params.wardrobePieces, params.clothingTypes) {
-            params.clothingTypes.mapNotNull { type ->
-                params.wardrobePieces
-                    .filter { it.typeId == type.id }
-                    .takeIf { it.isNotEmpty() }
-                    ?.let { type to it }
-            }
-        }
     val inputs =
         AddOutfitFormInputs(
             minDate = minDate,
             maxDate = maxDate,
-            piecesByType = piecesByType,
             currentPhotoPath = currentPhotoPath,
             pickerResult = pickerResult,
             selfieActions = selfieActions,
@@ -248,11 +260,14 @@ private fun AddOutfitForm(
             pickerResult = inputs.pickerResult,
             actions = inputs.selfieActions,
         )
-        PiecePicker(
-            piecesByType = inputs.piecesByType,
-            selectedPieceIds = state.selectedPieceIds,
+        val selectedPieces =
+            remember(state.selectedPieceIds, state.params.wardrobePieces) {
+                state.params.wardrobePieces.filter { it.id in state.selectedPieceIds }
+            }
+        PieceSummary(
+            selectedPieces = selectedPieces,
             wardrobeEmpty = state.params.wardrobePieces.isEmpty(),
-            onToggle = state::togglePiece,
+            onChoosePieces = { state.showPiecePicker = true },
         )
         OutlinedTextField(
             value = state.notes,
@@ -296,16 +311,19 @@ private fun DateStepper(
     }
 }
 
+/** Prompts opening the piece picker gallery and summarises the current selection as chips. */
 @Composable
-private fun PiecePicker(
-    piecesByType: List<Pair<ClothingType, List<ClothingPiece>>>,
-    selectedPieceIds: Set<Long>,
+private fun PieceSummary(
+    selectedPieces: List<ClothingPiece>,
     wardrobeEmpty: Boolean,
-    onToggle: (Long) -> Unit,
+    onChoosePieces: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
-            text = "Pieces (optional, ${selectedPieceIds.size} selected):",
+            text = "Pieces (optional, ${selectedPieces.size} selected):",
             style = MaterialTheme.typography.bodySmall,
         )
         if (wardrobeEmpty) {
@@ -315,36 +333,22 @@ private fun PiecePicker(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        piecesByType.forEach { (type, pieces) ->
-            Text(
-                text = type.name,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
+        OutlinedButton(
+            onClick = onChoosePieces,
+            enabled = !wardrobeEmpty,
+        ) {
+            MaterialSymbol(
+                iconName = MaterialSymbols.APPAREL,
+                contentDescription = null,
+                size = 18.dp,
+                modifier = Modifier.align(Alignment.CenterVertically),
             )
-            pieces.forEach { piece ->
-                PieceToggleRow(
-                    piece = piece,
-                    checked = piece.id in selectedPieceIds,
-                    onToggle = { onToggle(piece.id) },
-                )
-            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Choose pieces")
         }
-    }
-}
-
-@Composable
-private fun PieceToggleRow(
-    piece: ClothingPiece,
-    checked: Boolean,
-    onToggle: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onToggle),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(checked = checked, onCheckedChange = { onToggle() })
-        Text(piece.name ?: "Piece ${piece.id}")
+        if (selectedPieces.isNotEmpty()) {
+            JournalPieceChips(pieces = selectedPieces)
+        }
     }
 }
 
