@@ -59,7 +59,6 @@ actual object NotificationScheduler {
         val request = UNNotificationRequest.requestWithIdentifier(spec.identifier, content, trigger)
         center.addNotificationRequest(request) { _ -> }
     }
-
 }
 
 /** One reminder schedule entry. */
