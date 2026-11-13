@@ -266,6 +266,33 @@ if "%PROCESSOR_ARCHITECTURE%"=="ARM64" (
     goto fail
 )
 
+rem ********** Petrichor quality gate (ktlint + detekt) **********
+rem build/test/check first run tools/lint.sh so style/analysis violations fail the command.
+rem Set PETRICHOR_LINT_SKIP=1 to bypass.
+set "petrichor_command="
+setlocal EnableDelayedExpansion
+for %%A in (%*) do (
+  if not defined petrichor_command (
+    set "petrichor_arg=%%A"
+    if not "!petrichor_arg:~0,1!"=="-" set "petrichor_command=%%A"
+  )
+)
+endlocal & set "petrichor_command=%petrichor_command%"
+if not "%PETRICHOR_LINT_SKIP%"=="" goto petrichor_skip_lint
+if "%petrichor_command%"=="build" goto petrichor_run_lint
+if "%petrichor_command%"=="test" goto petrichor_run_lint
+if "%petrichor_command%"=="check" goto petrichor_run_lint
+goto petrichor_skip_lint
+:petrichor_run_lint
+if exist "%~dp0project.yaml" if exist "%~dp0tools\lint.sh" (
+  "%busybox_exe%" sh "%~dp0tools\lint.sh" "%~dp0"
+  if errorlevel 1 (
+    echo Quality gate failed: ktlint/detekt reported violations (see above). >&2
+    exit /B 1
+  )
+)
+:petrichor_skip_lint
+
 rem We use busybox here because it doesn't reinterpret the user-passed command-line arguments (that we pass via %*).
 rem Also this way we can use the unified launcher script (.sh)
 set KOTLIN_CLI_WRAPPER_PATH=%~f0

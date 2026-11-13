@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="JavaScriptLibraryMappings">
+    <excludedPredefinedLibrary name="petrichor/build/tasks/_shared_npmInstallWasmJsTest/node_modules" />
+    <excludedPredefinedLibrary name="petrichor/build/tasks/_shared_testWasmJsDebug/playwright-project/node_modules" />
+    <excludedPredefinedLibrary name="petrichor/build/tasks/_webApp_npmInstallWasmJs/node_modules" />
+    <excludedPredefinedLibrary name="petrichor/build/tasks/_webApp_npmInstallWasmJsTest/node_modules" />
+  </component>
+</project>

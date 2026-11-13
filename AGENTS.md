@@ -22,9 +22,9 @@ For the wardrobe feature:
 
 For the weather feature UI:
 - `WeatherScreen` renders the main weather screen which shows the weather for the picked location.
-- `WeatherContent` renders the weather information for the main weather screen.
+- `WeatherContent` (private, inside `WeatherScreen.kt`) renders the weather information for the main weather screen.
 - `LocationPicker` renders the location picker UI from which the user can search new locations or pick one of the saved locations to see the weather for.
-- `LocationPickerViewModel` handles actions for search box, adding or removing the saved locations and moving the saved locations.
+- `LocationPickerController` handles actions for search box, adding or removing the saved locations and moving the saved locations.
 - `LocationHeader` renders the area which shows the current location and which the user can press to choose a different location.
 - `LocationListItem` handles the rendering for a location item which the user can select or which the user can save or delete.
 

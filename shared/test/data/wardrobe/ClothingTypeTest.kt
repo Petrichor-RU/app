@@ -16,7 +16,7 @@ class ClothingTypeTest {
     fun `built-in clothing types cover every clothing supertype`() {
         assertEquals(
             ClothingSupertype.entries.toSet(),
-            BuiltInClothingTypes.all.map { it.supertype }.toSet()
+            BuiltInClothingTypes.all.map { it.supertype }.toSet(),
         )
     }
 

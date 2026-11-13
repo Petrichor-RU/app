@@ -47,59 +47,79 @@ fun LocationListItem(
             highlighted -> 1.02f
             pressed -> 0.98f
             else -> 1f
-        }
+        },
     )
     val containerColor by animateColorAsState(
-        if (highlighted) colors.primaryContainer else cardColors.containerColor
+        if (highlighted) colors.primaryContainer else cardColors.containerColor,
     )
     val contentColor by animateColorAsState(
-        if (highlighted) colors.onPrimaryContainer else cardColors.contentColor
+        if (highlighted) colors.onPrimaryContainer else cardColors.contentColor,
     )
 
     Surface(
         onClick = onClick,
-        modifier = modifier
-            .padding(vertical = 2.dp, horizontal = 8.dp)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-            }
-            .fillMaxWidth(),
+        modifier =
+            modifier
+                .padding(vertical = 2.dp, horizontal = 8.dp)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                }.fillMaxWidth(),
         shape = CardDefaults.shape,
         color = containerColor,
         contentColor = contentColor,
         interactionSource = interactionSource,
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MaterialSymbol(
-                iconName = icon,
-                contentDescription = null,
-                tint = if (highlighted) colors.primary else iconTint,
+        LocationListItemContent(
+            title = title,
+            subtitle = subtitle,
+            icon = icon,
+            iconTint = if (highlighted) colors.primary else iconTint,
+            contentColor = contentColor,
+            trailingAction = trailingAction,
+        )
+    }
+}
+
+@Composable
+@Suppress("LongParameterList") // row visuals are passed individually; grouping them would obscure call sites
+private fun LocationListItemContent(
+    title: String,
+    subtitle: String?,
+    icon: String,
+    iconTint: Color,
+    contentColor: Color,
+    trailingAction: @Composable (() -> Unit)?,
+) {
+    Row(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MaterialSymbol(
+            iconName = icon,
+            contentDescription = null,
+            tint = iconTint,
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
-            Spacer(Modifier.width(16.dp))
-            Column(Modifier.weight(1f)) {
+            if (!subtitle.isNullOrBlank()) {
                 Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = contentColor.copy(alpha = 0.75f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor.copy(alpha = 0.75f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
             }
-            if (trailingAction != null) {
-                trailingAction()
-            }
+        }
+        if (trailingAction != null) {
+            trailingAction()
         }
     }
 }

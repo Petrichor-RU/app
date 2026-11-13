@@ -35,43 +35,47 @@ import sh.calvin.reorderable.ReorderableLazyListState
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
 @Composable
+@Suppress("LongMethod") // screen-sized composable owned by the weather tab
 fun LocationPicker(
     onLocationSelected: (Place) -> Unit,
     onCurrentLocationSelected: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: LocationPickerViewModel = viewModel { LocationPickerViewModel() },
+    controller: LocationPickerController = viewModel { LocationPickerController() },
 ) {
-    val state by viewModel.state.collectAsStateWithLifecycle()
+    val state by controller.state.collectAsStateWithLifecycle()
     val savedKeys = remember(state.saved) { state.saved.mapTo(HashSet()) { it.key } }
 
     val lazyListState = rememberLazyListState()
-    val reorderState = rememberReorderableLazyListState(lazyListState) { from, to ->
-        viewModel.move(from.key, to.key)
-    }
+    val reorderState =
+        rememberReorderableLazyListState(lazyListState) { from, to ->
+            val fromIndex = state.saved.indexOfFirst { it.key == from.key }
+            val toIndex = state.saved.indexOfFirst { it.key == to.key }
+            controller.move(fromIndex, toIndex)
+        }
 
     Column(modifier.fillMaxSize()) {
         OutlinedTextField(
             value = state.query,
-            onValueChange = viewModel::search,
+            onValueChange = controller::search,
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search for a city or area") },
             leadingIcon = { MaterialSymbol(iconName = MaterialSymbols.SEARCH, contentDescription = null) },
             trailingIcon = {
                 if (state.query.isNotEmpty()) {
-                    IconButton(onClick = { viewModel.search("") }) {
+                    IconButton(onClick = { controller.search("") }) {
                         MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Clear search")
                     }
                 }
             },
             singleLine = true,
-            shape = MaterialTheme.shapes.large
+            shape = MaterialTheme.shapes.large,
         )
 
         Spacer(Modifier.height(8.dp))
 
         LazyColumn(
             state = lazyListState,
-            contentPadding = PaddingValues(bottom = 16.dp)
+            contentPadding = PaddingValues(bottom = 16.dp),
         ) {
             if (state.query.isBlank()) {
                 item(key = "current-location") {
@@ -87,7 +91,7 @@ fun LocationPicker(
                 savedLocations(
                     saved = state.saved,
                     reorderState = reorderState,
-                    viewModel = viewModel,
+                    controller = controller,
                     onLocationSelected = onLocationSelected,
                 )
             } else {
@@ -95,11 +99,11 @@ fun LocationPicker(
                     search = state.search,
                     savedKeys = savedKeys,
                     onSelect = { location ->
-                        viewModel.search("")
+                        controller.search("")
                         onLocationSelected(location.toPlace())
                     },
-                    onAdd = viewModel::add,
-                    onRemove = viewModel::remove,
+                    onAdd = controller::add,
+                    onRemove = controller::remove,
                 )
             }
         }
@@ -109,7 +113,7 @@ fun LocationPicker(
 private fun LazyListScope.savedLocations(
     saved: List<LocationResult>,
     reorderState: ReorderableLazyListState,
-    viewModel: LocationPickerViewModel,
+    controller: LocationPickerController,
     onLocationSelected: (Place) -> Unit,
 ) {
     item(key = "saved-header") {
@@ -117,9 +121,10 @@ private fun LazyListScope.savedLocations(
             text = "Saved locations",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
-            modifier = Modifier
-                .animateItem()
-                .padding(start = 16.dp, top = 24.dp, bottom = 8.dp)
+            modifier =
+                Modifier
+                    .animateItem()
+                    .padding(start = 16.dp, top = 24.dp, bottom = 8.dp),
         )
     }
 
@@ -136,14 +141,15 @@ private fun LazyListScope.savedLocations(
                 subtitle = location.region,
                 highlighted = isDragging,
                 onClick = { onLocationSelected(location.toPlace()) },
-                modifier = Modifier.longPressDraggableHandle(
-                    onDragStopped = viewModel::commitOrder
-                ),
+                modifier =
+                    Modifier.longPressDraggableHandle(
+                        onDragStopped = { controller.commitOrder() },
+                    ),
                 trailingAction = {
-                    IconButton(onClick = { viewModel.remove(location) }) {
+                    IconButton(onClick = { controller.remove(location) }) {
                         MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Remove ${location.name}")
                     }
-                }
+                },
             )
         }
     }
@@ -157,23 +163,32 @@ private fun LazyListScope.searchResults(
     onRemove: (LocationResult) -> Unit,
 ) {
     when (search) {
-        LocationSearchState.Idle -> Unit
-        LocationSearchState.Loading -> item(key = "search-loading") {
-            Column(
-                Modifier.animateItem().fillMaxWidth().padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                CircularProgressIndicator()
-                Spacer(Modifier.height(12.dp))
-                Text("Searching locations...")
+        LocationSearchState.Idle -> {}
+
+        LocationSearchState.Loading -> {
+            item(key = "search-loading") {
+                Column(
+                    Modifier.animateItem().fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    CircularProgressIndicator()
+                    Spacer(Modifier.height(12.dp))
+                    Text("Searching locations...")
+                }
             }
         }
-        is LocationSearchState.Error -> item(key = "search-error") {
-            BoxMessage(search.message, Modifier.animateItem())
+
+        is LocationSearchState.Error -> {
+            item(key = "search-error") {
+                BoxMessage(search.message, Modifier.animateItem())
+            }
         }
+
         is LocationSearchState.Ready -> {
             if (search.results.isEmpty()) {
-                item(key = "search-empty") { BoxMessage("No locations found.", Modifier.animateItem()) }
+                item(key = "search-empty") {
+                    BoxMessage("No locations found.", Modifier.animateItem())
+                }
             }
             items(search.results, key = { result -> "result-${result.key}" }) { location ->
                 val isSaved = location.key in savedKeys
@@ -188,7 +203,7 @@ private fun LazyListScope.searchResults(
                         IconButton(
                             onClick = {
                                 if (isSaved) onRemove(location) else onAdd(location)
-                            }
+                            },
                         ) {
                             MaterialSymbol(
                                 iconName = if (isSaved) MaterialSymbols.CHECK else MaterialSymbols.ADD,
@@ -196,7 +211,7 @@ private fun LazyListScope.searchResults(
                                 tint = MaterialTheme.colorScheme.primary,
                             )
                         }
-                    }
+                    },
                 )
             }
         }

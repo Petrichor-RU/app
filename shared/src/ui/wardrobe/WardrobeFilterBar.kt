@@ -29,27 +29,28 @@ import nl.petrichor.app.data.wardrobe.ClothingType
 fun WardrobeFilterBar(
     clothingTypes: List<ClothingType>,
     onTypeSelected: (Long?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.End
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.End,
     ) {
         Box(modifier = Modifier.wrapContentSize(Alignment.TopEnd)) {
             IconButton(onClick = { showMenu = true }) {
                 MaterialSymbol(
                     iconName = MaterialSymbols.FILTER_LIST,
-                    contentDescription = "Filter"
+                    contentDescription = "Filter",
                 )
             }
 
             DropdownMenu(
                 expanded = showMenu,
-                onDismissRequest = { showMenu = false }
+                onDismissRequest = { showMenu = false },
             ) {
                 // All Types option
                 DropdownMenuItem(
@@ -57,7 +58,7 @@ fun WardrobeFilterBar(
                     onClick = {
                         onTypeSelected(null)
                         showMenu = false
-                    }
+                    },
                 )
 
                 // Individual types
@@ -67,7 +68,7 @@ fun WardrobeFilterBar(
                         onClick = {
                             onTypeSelected(type.id)
                             showMenu = false
-                        }
+                        },
                     )
                 }
             }

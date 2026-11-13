@@ -12,16 +12,32 @@ import kotlinx.coroutines.flow.Flow
  * Data Access Object for clothing entities
  */
 @Dao
+@Suppress("TooManyFunctions") // DAO query surface; each method is a single query
 interface ClothingDao {
-
-    @Query("SELECT * FROM clothing ORDER BY createdAt DESC")
+    @Query("SELECT * FROM clothing WHERE archived = 0 ORDER BY createdAt DESC")
     fun getAll(): Flow<List<ClothingPiece>>
 
-    @Query("SELECT * FROM clothing WHERE typeId = :typeId ORDER BY createdAt DESC")
+    @Query("SELECT * FROM clothing WHERE typeId = :typeId AND archived = 0 ORDER BY createdAt DESC")
     fun getByType(typeId: Long): Flow<List<ClothingPiece>>
 
     @Query("SELECT * FROM clothing WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): ClothingPiece?
+
+    // Archived pieces are only reachable through journal entries, not through the wardrobe UI.
+    @Query("SELECT * FROM clothing WHERE id = :id LIMIT 1")
+    suspend fun getByIdIncludingArchived(id: Long): ClothingPiece?
+
+    @Query("UPDATE clothing SET archived = :archived WHERE id = :id")
+    suspend fun setArchived(
+        id: Long,
+        archived: Boolean,
+    )
+
+    @Query("UPDATE clothing SET laundryUntilEpochMs = :untilEpochMs WHERE id = :id")
+    suspend fun setLaundryUntil(
+        id: Long,
+        untilEpochMs: Long,
+    )
 
     @Insert
     suspend fun insert(clothing: ClothingPiece): Long

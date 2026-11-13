@@ -16,6 +16,12 @@ fun initLocationDataStore(context: Context) {
     applicationContext = context.applicationContext
 }
 
-internal actual fun createLocationDataStore(): DataStore<Preferences> = PreferenceDataStoreFactory.createWithPath(
-    produceFile = { applicationContext.filesDir.resolve(LOCATION_DATASTORE_NAME).absolutePath.toPath() },
-)
+internal actual fun createLocationDataStore(): DataStore<Preferences> =
+    PreferenceDataStoreFactory.createWithPath(
+        produceFile = {
+            applicationContext.filesDir
+                .resolve(LOCATION_DATASTORE_NAME)
+                .absolutePath
+                .toPath()
+        },
+    )
