@@ -58,6 +58,7 @@ import nl.petrichor.app.data.outfit.buildEntryWeatherSnapshot
 import nl.petrichor.app.platform.BackHandler
 import nl.petrichor.app.ui.BoxMessage
 import nl.petrichor.app.ui.epochMsToLocalDate
+import nl.petrichor.app.ui.isLaundryActive
 import nl.petrichor.app.ui.longLabel
 import nl.petrichor.app.ui.shortLabel
 import kotlin.time.Clock
@@ -355,7 +356,7 @@ private fun JournalEntryRow(
                 if (entryWithPieces.pieces.isNotEmpty()) {
                     JournalPieceChips(pieces = entryWithPieces.pieces)
                 }
-                if (entry.laundryUntilEpochMs > 0) {
+                if (isLaundryActive(entry.laundryUntilEpochMs)) {
                     Text(
                         text = "In laundry until ${epochMsToLocalDate(entry.laundryUntilEpochMs).shortLabel()}",
                         style = MaterialTheme.typography.bodySmall,

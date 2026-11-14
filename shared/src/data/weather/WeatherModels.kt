@@ -23,6 +23,14 @@ data class WeatherSnapshot(
     val humidity: Int,
     val windSpeed: Int,
     val forecast: List<ForecastDay>,
+    /** UTC offset of the snapshot's location in seconds, from the forecast payload's `city.timezone`. */
+    val utcOffsetSeconds: Long = 0,
+    /**
+     * Whether [utcOffsetSeconds] is known. The default assumes "unknown"; the repository sets it
+     * from the payload's presence, so a real UTC+0 location still counts as known. Consumed by
+     * BackgroundConditionResolver to compute the location's local time for the background.
+     */
+    val utcOffsetKnown: Boolean = utcOffsetSeconds != 0L,
 )
 
 data class ForecastDay(

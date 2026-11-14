@@ -4,6 +4,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
 import kotlin.time.Instant
 
 private val monthShortNames: Map<Month, String> =
@@ -35,3 +36,13 @@ fun LocalDate.shortLabel(): String = "$day ${monthShortNames[month]}"
 
 fun epochMsToLocalDate(epochMs: Long): LocalDate =
     Instant.fromEpochMilliseconds(epochMs).toLocalDateTime(TimeZone.currentSystemDefault()).date
+
+/**
+ * True while a laundry mark is still active: [laundryUntilEpochMs] lies in the future
+ * (0 means never marked). The "In laundry until …" rows use this so they disappear once the
+ * until-time has passed, matching the recommendation logic that treats `<= now` as clean.
+ */
+fun isLaundryActive(
+    laundryUntilEpochMs: Long,
+    nowEpochMs: Long = Clock.System.now().toEpochMilliseconds(),
+): Boolean = laundryUntilEpochMs > nowEpochMs

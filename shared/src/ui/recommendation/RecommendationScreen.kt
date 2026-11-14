@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,15 +33,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kizitonwose.calendar.core.now
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
-import nl.petrichor.app.data.location.SelectedLocationStore
-import nl.petrichor.app.data.location.currentPlace
 import nl.petrichor.app.data.outfit.OutfitLogRepository
 import nl.petrichor.app.data.recommendation.RecommendationEngine
 import nl.petrichor.app.data.recommendation.RecommendationInput
@@ -50,16 +43,12 @@ import nl.petrichor.app.data.recommendation.dayWeatherFor
 import nl.petrichor.app.data.recommendation.forecastDates
 import nl.petrichor.app.data.recommendation.tempC
 import nl.petrichor.app.data.wardrobe.WardrobeRepository
-import nl.petrichor.app.data.weather.Place
-import nl.petrichor.app.data.weather.WeatherRepository
-import nl.petrichor.app.data.weather.WeatherSnapshot
 import nl.petrichor.app.ui.BoxMessage
+import nl.petrichor.app.ui.background.AppWeatherState
 
 private class RecommendationController : ViewModel() {
-    private val weatherRepository = WeatherRepository()
     private val wardrobeRepository = WardrobeRepository()
     private val outfitRepository = OutfitLogRepository()
-    private val locationStore = SelectedLocationStore()
 
     val allClothing = wardrobeRepository.getAllClothing()
     val clothingTypes = wardrobeRepository.getClothingTypes()
@@ -68,25 +57,6 @@ private class RecommendationController : ViewModel() {
     val modelState = outfitRepository.modelState
     val laundryVersion =
         combine(outfitRepository.laundryVersion, wardrobeRepository.laundryVersion) { outfit, piece -> outfit + piece }
-    val selectedPlace: Flow<Place?> = locationStore.selectedPlace
-
-    private val _locationName = MutableStateFlow("Finding your location...")
-    val locationName = _locationName.asStateFlow()
-
-    private val _weather = MutableStateFlow<WeatherSnapshot?>(null)
-    val weather: StateFlow<WeatherSnapshot?> = _weather.asStateFlow()
-
-    fun loadWeather(place: Place?) {
-        viewModelScope.launch {
-            // Shared selected place (decision 19); null means "use current location".
-            val target = place ?: currentPlace()
-            _locationName.value = target.name
-            weatherRepository.load(target).onSuccess { snapshot ->
-                _weather.value = snapshot
-                _locationName.value = snapshot.place.name
-            }
-        }
-    }
 
     fun markPieceLaundry(
         pieceId: Long,
@@ -98,30 +68,29 @@ private class RecommendationController : ViewModel() {
 
 /**
  * Suggestions tab (plan section 7): the calendar stays on top and the screen opens scrolled
- * below it to the top-3 outfit candidates in a horizontal pager.
+ * below it to the top-3 outfit candidates in a horizontal pager. Weather and location name come
+ * from the app-shell-shared [AppWeatherState] (loaded once per place in App.kt) rather than a
+ * private request, so this tab never issues its own weather load.
  */
 @Composable
-fun RecommendationScreen(modifier: Modifier = Modifier) {
+fun RecommendationScreen(
+    weatherState: AppWeatherState,
+    modifier: Modifier = Modifier,
+) {
     if (LocalInspectionMode.current) {
         BoxMessage(message = "Recommendation preview", modifier = modifier.fillMaxSize())
         return
     }
 
     val controller = viewModel { RecommendationController() }
-    val locationName by controller.locationName.collectAsStateWithLifecycle()
-    val weather by controller.weather.collectAsStateWithLifecycle()
+    val locationName = weatherState.place?.name ?: "Finding your location..."
+    val weather = weatherState.weather
     val allClothing by controller.allClothing.collectAsStateWithLifecycle(emptyList())
     val clothingTypes by controller.clothingTypes.collectAsStateWithLifecycle(emptyList())
     val entries by controller.entries.collectAsStateWithLifecycle(emptyList())
     val surveyedCount by controller.surveyedCount.collectAsStateWithLifecycle(0)
     val modelState by controller.modelState.collectAsStateWithLifecycle(null)
     val laundryVersion by controller.laundryVersion.collectAsStateWithLifecycle(0)
-    val selectedPlace by controller.selectedPlace.collectAsStateWithLifecycle(null)
-
-    LaunchedEffect(selectedPlace) {
-        controller.loadWeather(selectedPlace)
-    }
-
     val today = remember { LocalDate.now() }
     val candidates =
         remember(allClothing, clothingTypes, entries, surveyedCount, modelState, weather, laundryVersion, today) {

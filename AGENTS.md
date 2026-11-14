@@ -5,6 +5,8 @@
 - Do not create additional `MaterialSymbolsRenderingScope` instances in other files or composables.
 - Prefer updating the existing app-level scope in `App.kt` instead of introducing duplicate scopes elsewhere.
 - Keep changes focused and avoid unrelated refactors.
+- Use British English
+- Commit messages have a header, a line break, and a body. The header should be a single line of at most 56 characters. The body can have multiple lines, each of at most 72 characters.
 
 For the clothing detail screen:
 - State should be remember. If I open a detail view, switch tabs, and go back, the detail view should still be open

@@ -16,14 +16,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,75 +35,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.location.SelectedLocationStore
-import nl.petrichor.app.data.location.currentPlace
 import nl.petrichor.app.data.weather.Place
-import nl.petrichor.app.data.weather.WeatherRepository
 import nl.petrichor.app.data.weather.WeatherSnapshot
 import nl.petrichor.app.platform.BackHandler
 import nl.petrichor.app.ui.BoxMessage
+import nl.petrichor.app.ui.background.AppWeatherState
 
-private sealed interface WeatherUiState {
-    data object Loading : WeatherUiState
-
-    data class Ready(
-        val weather: WeatherSnapshot,
-    ) : WeatherUiState
-
-    data class Error(
-        val message: String,
-    ) : WeatherUiState
-}
-
-private class WeatherController : ViewModel() {
-    private val repository = WeatherRepository()
-    private val _state = MutableStateFlow<WeatherUiState>(WeatherUiState.Loading)
-    val state: StateFlow<WeatherUiState> = _state.asStateFlow()
-
-    fun load(place: Place) {
-        _state.value = WeatherUiState.Loading
-        viewModelScope.launch {
-            _state.value =
-                repository.load(place).fold(
-                    onSuccess = { WeatherUiState.Ready(it) },
-                    onFailure = { WeatherUiState.Error(it.message ?: "Unable to load weather.") },
-                )
-        }
-    }
-}
-
+/**
+ * Weather tab: shows the current weather for the picked location. Consumes the app-shell-shared
+ * [AppWeatherState] (loaded once per selected place by AppBackgroundController in App.kt) instead
+ * of issuing its own request; only the location picker state is local to this screen.
+ */
 @Composable
 @Suppress("LongMethod") // screen-sized composable owned by the weather tab
-fun WeatherScreen(modifier: Modifier = Modifier) {
-    val controller = viewModel { WeatherController() }
+fun WeatherScreen(
+    weatherState: AppWeatherState,
+    modifier: Modifier = Modifier,
+) {
     val locationController = viewModel { LocationPickerController() }
     val locationStore = remember { SelectedLocationStore() }
-    val state by controller.state.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
-    // Shared selected place (decision 19): null means "use current location".
-    val selectedPlace by locationStore.selectedPlace.collectAsStateWithLifecycle(null)
-    var resolvedCurrentPlace by remember { mutableStateOf<Place?>(null) }
     var pickerOpen by remember { mutableStateOf(false) }
-
-    LaunchedEffect(selectedPlace) {
-        val place = selectedPlace
-        if (place == null) {
-            // Only resolve the current location when no shared selection exists.
-            val current = currentPlace()
-            resolvedCurrentPlace = current
-            controller.load(current)
-        } else {
-            controller.load(place)
-        }
-    }
 
     fun closePicker() {
         pickerOpen = false
@@ -121,7 +77,7 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 18.dp)) {
         Spacer(Modifier.height(16.dp))
         LocationHeader(
-            locationName = selectedPlace?.name ?: resolvedCurrentPlace?.name ?: "Finding your location...",
+            locationName = weatherState.place?.name ?: "Finding your location...",
             pickerOpen = pickerOpen,
             onTogglePicker = {
                 if (pickerOpen) closePicker() else pickerOpen = true
@@ -130,7 +86,7 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(16.dp))
         WeatherScreenBody(
             pickerOpen = pickerOpen,
-            state = state,
+            state = weatherState,
             locationController = locationController,
             onLocationSelected = ::select,
             onCurrentLocationSelected = { select(null) },
@@ -142,7 +98,7 @@ fun WeatherScreen(modifier: Modifier = Modifier) {
 @Suppress("LongParameterList") // body inputs are passed individually; grouping them would obscure the call site
 private fun WeatherScreenBody(
     pickerOpen: Boolean,
-    state: WeatherUiState,
+    state: AppWeatherState,
     locationController: LocationPickerController,
     onLocationSelected: (Place) -> Unit,
     onCurrentLocationSelected: () -> Unit,
@@ -169,41 +125,49 @@ private fun WeatherScreenBody(
     }
 }
 
+/** Switches between the loading spinner, the error message and [WeatherContent] as the shared state settles. */
 @Composable
-private fun ForecastBody(state: WeatherUiState) {
-    AnimatedContent(targetState = state, contentKey = { it::class }) { current ->
-        when (current) {
-            is WeatherUiState.Loading -> {
-                Column(
-                    Modifier.fillMaxWidth().padding(top = 56.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
+private fun ForecastBody(state: AppWeatherState) {
+    AnimatedContent(targetState = state, contentKey = { it.loading to it.error }) { current ->
+        when {
+            current.loading -> {
+                Column(Modifier.fillMaxWidth().padding(top = 56.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     CircularProgressIndicator()
                     Spacer(Modifier.height(12.dp))
                     Text("Updating forecast...")
                 }
             }
 
-            is WeatherUiState.Error -> {
-                BoxMessage(current.message, Modifier.fillMaxWidth().padding(top = 28.dp))
+            current.error != null -> {
+                BoxMessage(current.error, Modifier.fillMaxWidth().padding(top = 28.dp))
             }
 
-            is WeatherUiState.Ready -> {
+            current.weather != null -> {
                 WeatherContent(current.weather)
             }
         }
     }
 }
 
+/**
+ * Current-weather card plus the 5-day forecast row. Width is capped at the forecast row's width
+ * so the tab stays readable on tablets and desktop. Root must be a single node: callers may place
+ * this inside Box-scoped containers (e.g. AnimatedContent), where multiple roots would overlap
+ * at TopStart.
+ */
 @Composable
 internal fun WeatherContent(
     weather: WeatherSnapshot,
     modifier: Modifier = Modifier,
 ) {
-    // Root must be a single node: callers may place this inside Box-scoped containers
-    // (e.g. AnimatedContent), where multiple roots would overlap at TopStart.
-    Column(modifier) {
-        Card(Modifier.fillMaxWidth()) {
+    val forecastCardWidth = 108.dp
+    val forecastSpacing = 10.dp
+    val forecastWidth = forecastCardWidth * 5 + forecastSpacing * 4
+    Column(modifier.widthIn(max = forecastWidth)) {
+        Card(
+            Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.78f)),
+        ) {
             Column(Modifier.padding(22.dp)) {
                 Text(weather.description, style = MaterialTheme.typography.titleMedium)
                 Row(verticalAlignment = Alignment.Bottom) {
@@ -217,9 +181,12 @@ internal fun WeatherContent(
         Spacer(Modifier.height(24.dp))
         Text("5-day forecast", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(10.dp))
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(forecastSpacing)) {
             items(weather.forecast) { day ->
-                Card(Modifier.width(108.dp)) {
+                Card(
+                    Modifier.width(forecastCardWidth),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.82f)),
+                ) {
                     Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(day.label.substringAfter("-"), fontWeight = FontWeight.SemiBold)
                         Text("${day.max}°", style = MaterialTheme.typography.titleLarge)

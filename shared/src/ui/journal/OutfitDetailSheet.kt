@@ -1,21 +1,12 @@
 package nl.petrichor.app.ui.journal
 
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
@@ -30,23 +21,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import nl.petrichor.app.data.media.loadImagePainter
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
-import nl.petrichor.app.data.wardrobe.ClothingPiece
-import nl.petrichor.app.ui.epochMsToLocalDate
 import nl.petrichor.app.ui.longLabel
-import nl.petrichor.app.ui.shortLabel
 
 /**
  * Full-screen overlay for a journal entry (plan section 5.3), reusing the visual pattern of
  * ClothingDetailScreen: hero selfie (or placeholder), date, notes, piece chips (archived
  * pieces marked), weather snapshot, survey section, and an overflow menu with laundry/edit/delete.
+ * The scrollable body is delegated to [OutfitDetailContent], which switches to a two-column layout
+ * on wide screens; this composable owns the header menu and the laundry/delete confirmation dialogs.
  */
 @Composable
 fun OutfitDetailSheet(
@@ -62,10 +49,11 @@ fun OutfitDetailSheet(
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) { paddingValues ->
+        OutfitDetailContent(
+            entryWithPieces = entryWithPieces,
+            onSurvey = { actions.onSurvey(entryWithPieces) },
+            modifier = Modifier.fillMaxSize().padding(paddingValues),
         ) {
             DetailHeader(
                 entry = entry,
@@ -79,15 +67,6 @@ fun OutfitDetailSheet(
                         onLaundry = { showLaundryChooser = true },
                     ),
             )
-            SelfieCard(photoPath = entry.photoPath)
-            entry.notes?.let { notes ->
-                Text(notes, style = MaterialTheme.typography.bodyMedium)
-            }
-            PiecesSection(pieces = entryWithPieces.pieces)
-            WeatherSection(entry = entry)
-            SurveySection(entry = entry, onSurvey = { actions.onSurvey(entryWithPieces) })
-            LaundryNotice(laundryUntilEpochMs = entry.laundryUntilEpochMs)
-            Spacer(Modifier.height(8.dp))
         }
     }
 
@@ -178,108 +157,6 @@ private fun DetailHeader(
             MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Close")
         }
     }
-}
-
-@Composable
-private fun SelfieCard(photoPath: String?) {
-    Card(
-        modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-        shape = MaterialTheme.shapes.medium,
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val painter =
-                if (photoPath?.isNotEmpty() == true) {
-                    loadImagePainter(photoPath)
-                } else {
-                    null
-                }
-            if (painter != null) {
-                Image(
-                    painter = painter,
-                    contentDescription = "Outfit selfie",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            } else {
-                MaterialSymbol(
-                    iconName = MaterialSymbols.IMAGE,
-                    contentDescription = "No selfie",
-                    modifier = Modifier.size(64.dp),
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun PiecesSection(pieces: List<ClothingPiece>) {
-    if (pieces.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Pieces", style = MaterialTheme.typography.titleMedium)
-        JournalPieceChips(pieces = pieces)
-    }
-}
-
-@Composable
-private fun WeatherSection(entry: OutfitEntry) {
-    if (entry.temperatureC == null && entry.minTempC == null && entry.weatherDescription == null) return
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text("Weather at logging", style = MaterialTheme.typography.titleMedium)
-        entry.weatherDescription?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium)
-        }
-        val temps =
-            listOfNotNull(
-                entry.temperatureC?.let { "${it.toInt()}°" },
-                entry.minTempC?.let { "min ${it.toInt()}°" },
-                entry.maxTempC?.let { "max ${it.toInt()}°" },
-            ).joinToString(" • ")
-        if (temps.isNotEmpty()) {
-            Text(temps, style = MaterialTheme.typography.bodyMedium)
-        }
-        if (entry.isRainy) {
-            Text("Rainy", style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
-
-@Composable
-private fun SurveySection(
-    entry: OutfitEntry,
-    onSurvey: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Survey", style = MaterialTheme.typography.titleMedium)
-        if (entry.surveyFeelingScore != null && entry.surveyWarmthVerdict != null) {
-            Text(
-                "${entry.surveyFeelingScore}/5 - ${entry.surveyWarmthVerdict.verdictLabel()}",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-            )
-            TextButton(onClick = onSurvey) {
-                Text("Edit survey")
-            }
-        } else {
-            Text(
-                "Survey pending",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            TextButton(onClick = onSurvey) {
-                Text("Fill in survey")
-            }
-        }
-    }
-}
-
-@Composable
-private fun LaundryNotice(laundryUntilEpochMs: Long) {
-    if (laundryUntilEpochMs <= 0) return
-    Text(
-        "In laundry until ${epochMsToLocalDate(laundryUntilEpochMs).shortLabel()}",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.primary,
-    )
 }
 
 @Composable

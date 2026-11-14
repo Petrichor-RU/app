@@ -3,18 +3,27 @@ package nl.petrichor.app.data.weather
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.statement.bodyAsText
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import nl.petrichor.app.AppConfig
 
 class WeatherRepository(
     private val client: HttpClient = weatherHttpClient(),
     private val apiKey: String = AppConfig.OPENWEATHER_API_KEY,
 ) {
+    /**
+     * Loads the current weather and 5-day forecast for [place] into one [WeatherSnapshot],
+     * including the location's UTC offset ([WeatherSnapshot.utcOffsetSeconds]) that the
+     * background scene uses for local time. Cancellation is rethrown so switching locations
+     * cancels the in-flight request instead of swallowing it into a failure.
+     */
+    @Suppress("LongMethod") // Parses the current and forecast payloads into one shared snapshot.
     suspend fun load(place: Place): Result<WeatherSnapshot> =
         runCatching {
             require(apiKey.isNotBlank()) {
@@ -36,6 +45,18 @@ class WeatherRepository(
             val forecastItems = forecast["list"]!!.jsonArray
             WeatherSnapshot(
                 place = place,
+                utcOffsetSeconds =
+                    forecast["city"]
+                        ?.jsonObject
+                        ?.get("timezone")
+                        ?.jsonPrimitive
+                        ?.longOrNull ?: 0,
+                utcOffsetKnown =
+                    forecast["city"]
+                        ?.jsonObject
+                        ?.get("timezone")
+                        ?.jsonPrimitive
+                        ?.longOrNull != null,
                 temperature = main["temp"]!!.jsonPrimitive.double.toInt(),
                 feelsLike = main["feels_like"]!!.jsonPrimitive.double.toInt(),
                 description = currentWeather["description"]!!.jsonPrimitive.content.replaceFirstChar { it.uppercase() },
@@ -66,5 +87,5 @@ class WeatherRepository(
                             )
                         },
             )
-        }
+        }.onFailure { if (it is CancellationException) throw it }
 }

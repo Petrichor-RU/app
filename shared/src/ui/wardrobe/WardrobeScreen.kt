@@ -52,7 +52,7 @@ import nl.petrichor.app.platform.BackHandler
 import nl.petrichor.app.ui.BoxMessage
 
 /**
- * The main wardrobe screen showing clothing items in a 2x2 grid
+ * The main wardrobe screen showing clothing items in an adaptive grid
  */
 @Suppress("TooGenericExceptionCaught") // repository failures are surfaced as snackbars, so any exception is handled
 class WardrobeViewModel : ViewModel() {
@@ -217,7 +217,7 @@ fun WardrobeScreen(modifier: Modifier = Modifier) {
                 }
 
             LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
+                columns = GridCells.Adaptive(160.dp),
                 modifier =
                     Modifier
                         .fillMaxSize()
