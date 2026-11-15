@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -29,13 +30,14 @@ import nl.petrichor.app.ui.weather.WeatherScreen
 /** Slide content panel width cap, tunable. */
 private val CONTENT_PANEL_MAX_WIDTH = 720.dp
 
+/** Tab demo slide content column width cap: roughly a phone screen, tunable. */
+private val TAB_COLUMN_MAX_WIDTH = 720.dp
+
 /** Slide content panel corner radius, tunable. */
 private val CONTENT_PANEL_SHAPE = RoundedCornerShape(24.dp)
 
 /** Alpha of the semi-transparent panel behind slide content, tunable. */
 private const val CONTENT_PANEL_ALPHA = 0.72f
-
-private val SLIDE_EDGE_PADDING = 24.dp
 
 /**
  * The real slide list (writeups/2026-11-15-PRESENTATION.md, section 4): title, overview, the
@@ -101,22 +103,18 @@ private fun SlideBullet(text: String) {
 }
 
 /**
- * Slides 3-6: a live tab screen on the semi-transparent panel. The screen is centred in a panel
- * capped at [CONTENT_PANEL_MAX_WIDTH] so large windows show the tab at a sensible size instead of
- * a stretched grid; the background park scene shows around it.
+ * Slides 3-6: a live tab screen with no box behind it — the deck-wide scrim sits between it and
+ * the park scene. The screen is centred in a column capped at [TAB_COLUMN_MAX_WIDTH] (roughly a
+ * phone width) so large windows show the tab at a sensible size instead of a stretched grid.
  */
 @Composable
 internal fun TabSlide(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Surface(
-            shape = CONTENT_PANEL_SHAPE,
-            color = MaterialTheme.colorScheme.surface.copy(alpha = CONTENT_PANEL_ALPHA),
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = CONTENT_PANEL_MAX_WIDTH)
-                    .padding(horizontal = SLIDE_EDGE_PADDING, vertical = 16.dp),
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .widthIn(max = TAB_COLUMN_MAX_WIDTH)
+                .fillMaxWidth(),
         ) {
             content()
         }
