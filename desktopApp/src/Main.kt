@@ -7,7 +7,17 @@ import androidx.compose.ui.window.application
 import java.net.URL
 import javax.imageio.ImageIO
 
-fun main() =
+/**
+ * Desktop entry point. Launches as the normal app, or as the presentation deck with
+ * `--presentation` (or `-Dpetrichor.mode=presentation`): see writeups/2026-11-15-PRESENTATION.md.
+ * The parsed mode is announced through the `petrichor.mode` system property before any storage is
+ * created, so the data actuals can move to the isolated `~/.petrichor-presentation` root.
+ */
+fun main(args: Array<String>) {
+    val mode = AppMode.fromJvmLaunchArgs(args.toList(), System.getProperty(AppMode.JVM_MODE_PROPERTY))
+    if (mode == AppMode.PRESENTATION) {
+        System.setProperty(AppMode.JVM_MODE_PROPERTY, AppMode.PRESENTATION_VALUE)
+    }
     application {
         val icon =
             remember {
@@ -18,6 +28,7 @@ fun main() =
                 ImageIO.read(url).toPainter()
             }
         Window(onCloseRequest = ::exitApplication, title = "petrichor", icon = icon) {
-            App()
+            App(mode = mode)
         }
     }
+}

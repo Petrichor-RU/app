@@ -6,6 +6,7 @@ import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import kotlinx.coroutines.Dispatchers
 import nl.petrichor.app.data.outfit.OutfitDao
+import nl.petrichor.app.data.petrichorDataDirectory
 import nl.petrichor.app.data.wardrobe.ClothingDao
 import java.io.File
 
@@ -15,9 +16,9 @@ import java.io.File
  */
 actual object PetrichorDatabaseProvider {
     private val dbInstance: PetrichorDatabase by lazy {
-        val dbDirectory =
-            File(System.getProperty("user.home"), ".petrichor")
-                .apply { check(mkdirs() || isDirectory) { "Could not create petrichor database directory." } }
+        // petrichorDataDirectory() resolves ~/.petrichor-presentation in presentation mode, so
+        // demonstrations run against an isolated, empty database.
+        val dbDirectory = petrichorDataDirectory()
         val dbFile = File(dbDirectory, PetrichorDatabase.DATABASE_NAME)
         Room
             .databaseBuilder<PetrichorDatabase>(

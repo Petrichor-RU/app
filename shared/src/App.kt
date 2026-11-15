@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -32,6 +33,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
 import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.background.BackgroundConditionResolver
@@ -46,6 +48,8 @@ import nl.petrichor.app.ui.background.tabScrimAlphas
 import nl.petrichor.app.ui.journal.JournalActionBus
 import nl.petrichor.app.ui.journal.JournalPendingAction
 import nl.petrichor.app.ui.journal.JournalScreen
+import nl.petrichor.app.ui.presentation.PRESENTATION_SCRIM_ALPHA
+import nl.petrichor.app.ui.presentation.PetrichorPresentation
 import nl.petrichor.app.ui.recommendation.RecommendationScreen
 import nl.petrichor.app.ui.wardrobe.WardrobeScreen
 import nl.petrichor.app.ui.weather.WeatherScreen
@@ -78,11 +82,19 @@ private val tabs =
  *
  * @param onDarkThemeChanged called whenever the effective dark scheme changes; Android uses it
  *   to switch system-bar icon contrast at the crossfade midpoint, other platforms ignore it.
+ * @param mode which face of the app runs. Presentation mode (desktop launch argument or WASM URL
+ *   parameter) replaces the tab shell with the presentation slide deck; Android and iOS always
+ *   run in the default [AppMode.APP] (writeups/2026-11-15-PRESENTATION.md).
  */
 @Composable
 @Suppress("LongMethod") // App shell composes navigation and its shared scene/theme state.
-fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
-    // The app opens on the Suggestions tab.
+fun App(
+    onDarkThemeChanged: (Boolean) -> Unit = {},
+    mode: AppMode = AppMode.APP,
+) {
+    val presentation = mode == AppMode.PRESENTATION
+    // The app opens on the Suggestions tab. Unchanged in presentation mode, where the pager
+    // stays empty and only the deck drives the screen.
     val pagerState = rememberPagerState(initialPage = SUGGESTIONS_TAB, pageCount = { TAB_COUNT })
     val coroutineScope = rememberCoroutineScope()
     val selectedTab = pagerState.currentPage
@@ -106,16 +118,20 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
     LaunchedEffect(controller, lifecycle) {
         if (controller != null) lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { controller.run() }
     }
-    val scrimAlpha by animateFloatAsState(tabScrimAlphas[selectedTab], label = "Tab scene visibility")
+    val scrimAlpha by animateFloatAsState(
+        if (presentation) PRESENTATION_SCRIM_ALPHA else tabScrimAlphas[selectedTab],
+        label = "Tab scene visibility",
+    )
 
     // Retrain the recommendation model lazily at app start when the stored model is stale.
     LaunchedEffect(Unit) {
         if (!inspection) OutfitLogRepository().ensureModelFresh()
     }
 
-    // Notification deep links: animate to the Journal tab when an action is pending.
+    // Notification deep links: animate to the Journal tab when an action is pending. The
+    // presentation deck has no tab pager, so the deep-link bus stays unused there.
     LaunchedEffect(pendingJournalAction) {
-        if (pendingJournalAction != null) {
+        if (pendingJournalAction != null && !presentation) {
             pagerState.animateScrollToPage(JOURNAL_TAB)
         }
     }
@@ -125,46 +141,68 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
             Box(Modifier.fillMaxSize()) {
                 ParkBackground(condition)
                 Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface.copy(alpha = scrimAlpha)))
-                Scaffold(
-                    containerColor = Color.Transparent,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                    contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                    bottomBar = {
-                        NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
-                            tabs.forEachIndexed { index, tab ->
-                                NavigationBarItem(
-                                    selected = selectedTab == index,
-                                    onClick = {
-                                        coroutineScope.launch { pagerState.animateScrollToPage(index) }
-                                    },
-                                    icon = {
-                                        MaterialSymbol(
-                                            iconName = tab.icon,
-                                            contentDescription = null,
-                                        )
-                                    },
-                                    label = { Text(tab.label) },
-                                )
-                            }
-                        }
-                    },
-                ) { padding ->
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier =
-                            Modifier
-                                .fillMaxSize()
-                                .padding(padding),
-                    ) { page ->
-                        AppTabContent(
-                            page = page,
-                            weatherState = weatherState,
-                            pendingJournalAction = pendingJournalAction,
-                            onActionConsumed = { JournalActionBus.consume() },
-                        )
-                    }
+                if (presentation) {
+                    PetrichorPresentation(weatherState = weatherState, modifier = Modifier.fillMaxSize())
+                } else {
+                    AppTabShell(
+                        pagerState = pagerState,
+                        coroutineScope = coroutineScope,
+                        selectedTab = selectedTab,
+                        weatherState = weatherState,
+                        pendingJournalAction = pendingJournalAction,
+                    )
                 }
             }
+        }
+    }
+}
+
+/** The normal app's tab shell: the bottom navigation bar and the tab pager. */
+@Composable
+private fun AppTabShell(
+    pagerState: PagerState,
+    coroutineScope: CoroutineScope,
+    selectedTab: Int,
+    weatherState: AppWeatherState,
+    pendingJournalAction: JournalPendingAction?,
+) {
+    Scaffold(
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        bottomBar = {
+            NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)) {
+                tabs.forEachIndexed { index, tab ->
+                    NavigationBarItem(
+                        selected = selectedTab == index,
+                        onClick = {
+                            coroutineScope.launch { pagerState.animateScrollToPage(index) }
+                        },
+                        icon = {
+                            MaterialSymbol(
+                                iconName = tab.icon,
+                                contentDescription = null,
+                            )
+                        },
+                        label = { Text(tab.label) },
+                    )
+                }
+            }
+        },
+    ) { padding ->
+        HorizontalPager(
+            state = pagerState,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+        ) { page ->
+            AppTabContent(
+                page = page,
+                weatherState = weatherState,
+                pendingJournalAction = pendingJournalAction,
+                onActionConsumed = { JournalActionBus.consume() },
+            )
         }
     }
 }

@@ -21,6 +21,19 @@ command line:
 - Desktop app: `./kotlin run -m desktopApp`
 - iOS app: `./kotlin run -m iosApp`
 
+### Presentation mode
+
+The presentation build (slide deck over the live app; see `writeups/2026-11-15-PRESENTATION.md`) is
+selected at runtime, not at compile time. It starts from an isolated, empty data set, so a
+demonstration never touches the normal app's data.
+
+- Desktop app: `./kotlin run -m desktopApp -- --presentation` — or start the desktop app with the
+  system property `-Dpetrichor.mode=presentation`.
+- Web app: serve the WASM build and open it with `?mode=presentation` in the URL.
+
+Internet access is required on stage: the weather comes from the live OpenWeather API.
+
+
 ### Building a deployable WASM version
 
 The web application is compiled to Kotlin/WASM by the `webApp` module. Build its release

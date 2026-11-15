@@ -3,6 +3,7 @@ package nl.petrichor.app.data.media
 import androidx.compose.ui.graphics.painter.Painter
 import io.github.ismoy.imagepickerkmp.extensions.loadBytes
 import io.github.ismoy.imagepickerkmp.picker.PhotoResult
+import nl.petrichor.app.data.petrichorDataDirectory
 import java.io.File
 import java.net.URI
 
@@ -11,9 +12,7 @@ internal actual suspend fun saveMediaImage(
     extension: String,
     scope: MediaScope,
 ): String {
-    val directory =
-        File(System.getProperty("user.home"), ".petrichor/${scope.directoryName}")
-            .apply { mkdirs() }
+    val directory = petrichorDataDirectory().resolve(scope.directoryName).apply { mkdirs() }
     val sourceBytes = readSourceBytes(photo.uri) ?: photo.loadBytes()
     check(sourceBytes.isNotEmpty()) { "Selected image contains no data." }
     // Rotate the pixels according to the EXIF orientation and re-encode the image:
