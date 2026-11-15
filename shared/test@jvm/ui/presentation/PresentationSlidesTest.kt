@@ -45,7 +45,7 @@ class PresentationSlidesTest {
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `placeholder slide shows title, bullets and footer`() =
+    fun `placeholder slide shows title, bullets and has no footer`() =
         runDesktopComposeUiTest {
             setContent {
                 MaterialSymbolsRenderingScope {
@@ -58,24 +58,24 @@ class PresentationSlidesTest {
             onNodeWithText("Placeholder title 3").assertIsDisplayed()
             onNodeWithText("Third example point").assertIsDisplayed()
             onNodeWithText("Fifth example point").assertIsDisplayed()
-            onNodeWithText("Slide 3 of $PLACEHOLDER_SLIDE_COUNT").assertIsDisplayed()
+            onNodeWithText("Slide 3 of $PLACEHOLDER_SLIDE_COUNT").assertDoesNotExist()
         }
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `tab slide shows the caption chip and the embedded content`() =
+    fun `tab slide renders the embedded content without a tab label`() =
         runDesktopComposeUiTest {
             setContent {
                 MaterialSymbolsRenderingScope {
                     MaterialTheme {
-                        TabSlide(caption = "Wardrobe") {
+                        TabSlide {
                             Text("Fake tab content")
                         }
                     }
                 }
             }
 
-            onNodeWithText("Wardrobe").assertIsDisplayed()
             onNodeWithText("Fake tab content").assertIsDisplayed()
+            onNodeWithText("Wardrobe").assertDoesNotExist()
         }
 }

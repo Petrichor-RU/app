@@ -1,10 +1,8 @@
 package nl.petrichor.app.ui.presentation
 
-import androidx.compose.ui.input.key.Key
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class PresentationDeckStateTest {
@@ -57,23 +55,5 @@ class PresentationDeckStateTest {
     fun `initial slide out of range is clamped into the deck`() {
         assertEquals(2, PresentationDeckState(slideCount = 3, initialSlide = 7).slideIndex)
         assertEquals(0, PresentationDeckState(slideCount = 3, initialSlide = -4).slideIndex)
-    }
-
-    @Test
-    fun `keyboard mapping sends arrow right and spacebar forward`() {
-        assertEquals(DeckKeyAction.FORWARD, deckKeyActionFor(Key.DirectionRight))
-        assertEquals(DeckKeyAction.FORWARD, deckKeyActionFor(Key.Spacebar))
-    }
-
-    @Test
-    fun `keyboard mapping sends arrow left and backspace backward`() {
-        assertEquals(DeckKeyAction.BACKWARD, deckKeyActionFor(Key.DirectionLeft))
-        assertEquals(DeckKeyAction.BACKWARD, deckKeyActionFor(Key.Backspace))
-    }
-
-    @Test
-    fun `keyboard mapping ignores other keys`() {
-        assertNull(deckKeyActionFor(Key.Escape))
-        assertNull(deckKeyActionFor(Key.A))
     }
 }
