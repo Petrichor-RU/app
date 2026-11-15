@@ -53,10 +53,48 @@ internal fun presentationSlides(weatherState: AppWeatherState): List<@Composable
         add { TabSlide { JournalScreen() } }
         add { TabSlide { RecommendationScreen(weatherState = weatherState) } }
         add { TabSlide { WeatherScreen(weatherState = weatherState) } }
-        add { ProgressSlide() }
-        add { GroupSlide() }
-        add { RisksSlide() }
-        add { ToolsSlide() }
+        add {
+            BulletListSlide(
+                "Progress",
+                bullets =
+                    listOf(
+                        "We have a rough MVP going",
+                        // "Add integration with online clothing stores",
+                        "Pivot towards x",
+                        "Fourth example point",
+                        "Fifth example point",
+                    ),
+            )
+        }
+        add {
+            BulletListSlide(
+                "Group",
+                bullets =
+                    listOf(
+                        "Two people on outreach and administration, three on development",
+                        "Every Tuesday, collaborate in a room",
+                    ),
+            )
+        }
+        add {
+            BulletListSlide(
+                "Risks",
+                bullets = listOf("Lack of users", "Model needs data"),
+            )
+        }
+        add {
+            BulletListSlide(
+                "Tools",
+                bullets =
+                    listOf(
+                        "GitHub for the repository, Jira for tickets",
+                        "Obsidian for notekeeping",
+                        "Each developer has a different way of working",
+                        "Mistral Vibe for writing implementation plans, Vibe Code for implementation",
+                        "ChatGPT for help with implementation",
+                    ),
+            )
+        }
     }
 
 /** Placeholder slides 7-11 of the deck; their titles number them within this run. */
@@ -145,47 +183,22 @@ internal fun PlaceholderSlide(number: Int) {
     }
 }
 
+/**
+ * A titled list of example bullets in the shared panel — used for the progress, group, risks and
+ * tools slides, which differ only in their content.
+ */
 @Composable
-internal fun ProgressSlide() {
+private fun BulletListSlide(
+    title: String,
+    bullets: List<String>,
+) {
     SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Progress", style = MaterialTheme.typography.headlineMedium)
-        SlideBullet("We have a rough MVP going")
-//        SlideBullet("Add integration with online clothing stores")
-        SlideBullet("Pivot towards x")
-        SlideBullet("Fourth example point")
-        SlideBullet("Fifth example point")
+        Text(title, style = MaterialTheme.typography.headlineMedium)
+        bullets.forEach { bullet ->
+            SlideBullet(bullet)
+        }
     }
 }
-
-@Composable
-internal fun RisksSlide() {
-    SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Risks", style = MaterialTheme.typography.headlineMedium)
-        SlideBullet("Lack of users")
-        SlideBullet("Model needs data")
-    }
-}
-
-@Composable
-internal fun GroupSlide() {
-    SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Group", style = MaterialTheme.typography.headlineMedium)
-        SlideBullet("Two people on outreach and administration, three on development")
-        SlideBullet("Every Tuesday, collaborate in a room")
-    }
-}
-@Composable
-internal fun ToolsSlide() {
-    SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Tools", style = MaterialTheme.typography.headlineMedium)
-        SlideBullet("GitHub for the repository, Jira for tickets")
-        SlideBullet("Obsidian for notekeeping")
-        SlideBullet("Each developer has a different way of working")
-        SlideBullet("Mistral Vibe for writing implementation plans, Vibe Code for implementation")
-        SlideBullet("ChatGPT for help with implementation")
-    }
-}
-
 
 /**
  * Shared slide layout for text content: the content column sits inside a semi-transparent panel,
