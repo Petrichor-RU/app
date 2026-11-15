@@ -53,7 +53,10 @@ internal fun presentationSlides(weatherState: AppWeatherState): List<@Composable
         add { TabSlide { JournalScreen() } }
         add { TabSlide { RecommendationScreen(weatherState = weatherState) } }
         add { TabSlide { WeatherScreen(weatherState = weatherState) } }
-        repeat(PLACEHOLDER_SLIDE_COUNT) { number -> add { PlaceholderSlide(number = number + 1) } }
+        add { ProgressSlide() }
+        add { GroupSlide() }
+        add { RisksSlide() }
+        add { ToolsSlide() }
     }
 
 /** Placeholder slides 7-11 of the deck; their titles number them within this run. */
@@ -87,10 +90,10 @@ internal fun OverviewSlide() {
             "Petrichor helps you decide what to wear.",
             style = MaterialTheme.typography.titleMedium,
         )
-        SlideBullet("Your wardrobe, always with you")
-        SlideBullet("Log what you wore and how it felt")
-        SlideBullet("Personal comfort model, trained on you")
-        SlideBullet("Weather-aware outfit suggestions, every day")
+        SlideBullet("Wardrobe management")
+        SlideBullet("Outfit logging: was it comfortable, was it too warm or cold?")
+        SlideBullet("Comfort model trained on the outfits you logged")
+        SlideBullet("Weather-aware outfit suggestions")
     }
 }
 
@@ -141,6 +144,48 @@ internal fun PlaceholderSlide(number: Int) {
         SlideBullet("Fifth example point")
     }
 }
+
+@Composable
+internal fun ProgressSlide() {
+    SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Progress", style = MaterialTheme.typography.headlineMedium)
+        SlideBullet("We have a rough MVP going")
+//        SlideBullet("Add integration with online clothing stores")
+        SlideBullet("Pivot towards x")
+        SlideBullet("Fourth example point")
+        SlideBullet("Fifth example point")
+    }
+}
+
+@Composable
+internal fun RisksSlide() {
+    SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Risks", style = MaterialTheme.typography.headlineMedium)
+        SlideBullet("Lack of users")
+        SlideBullet("Model needs data")
+    }
+}
+
+@Composable
+internal fun GroupSlide() {
+    SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Group", style = MaterialTheme.typography.headlineMedium)
+        SlideBullet("Two people on outreach and administration, three on development")
+        SlideBullet("Every Tuesday, collaborate in a room")
+    }
+}
+@Composable
+internal fun ToolsSlide() {
+    SlideContentPanel(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("Tools", style = MaterialTheme.typography.headlineMedium)
+        SlideBullet("GitHub for the repository, Jira for tickets")
+        SlideBullet("Obsidian for notekeeping")
+        SlideBullet("Each developer has a different way of working")
+        SlideBullet("Mistral Vibe for writing implementation plans, Vibe Code for implementation")
+        SlideBullet("ChatGPT for help with implementation")
+    }
+}
+
 
 /**
  * Shared slide layout for text content: the content column sits inside a semi-transparent panel,

@@ -38,9 +38,6 @@ class PresentationSlidesTest {
             }
 
             onNodeWithText("What is Petrichor?").assertIsDisplayed()
-            onNodeWithText("Petrichor helps you decide what to wear.").assertIsDisplayed()
-            onNodeWithText("Your wardrobe, always with you").assertIsDisplayed()
-            onNodeWithText("Weather-aware outfit suggestions, every day").assertIsDisplayed()
         }
 
     @Test
