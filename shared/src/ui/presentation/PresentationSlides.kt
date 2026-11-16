@@ -89,6 +89,7 @@ internal fun presentationSlides(weatherState: AppWeatherState): List<@Composable
                     listOf(
                         "GitHub for the repository, Jira for tickets",
                         "Obsidian for notekeeping",
+                        "ktlint and detekt for code quality",
                         "Each developer has a different way of working",
                         "Mistral Vibe for writing implementation plans, Vibe Code for implementation",
                         "ChatGPT for help with implementation",
