@@ -34,7 +34,11 @@ class SelectedLocationStore(
 
     suspend fun clear() {
         dataStore.edit { prefs ->
-            prefs.remove(selectedPlaceKey)
+            // DataStore 1.3.0's MutablePreferences.remove unwraps its return as a non-null T,
+            // which throws when the key is absent on Kotlin/Wasm; guard removal on existence.
+            if (selectedPlaceKey in prefs) {
+                prefs.remove(selectedPlaceKey)
+            }
         }
     }
 }
