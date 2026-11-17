@@ -59,10 +59,9 @@ internal fun presentationSlides(weatherState: AppWeatherState): List<@Composable
                 bullets =
                     listOf(
                         "We have a rough MVP going",
-                        // "Add integration with online clothing stores",
-                        "Pivot towards x",
-                        "Fourth example point",
-                        "Fifth example point",
+                        "Pivot towards travellers to Europe",
+                        "Add 'weather guides'",
+                        "Add integration with online clothing stores (Vinted, H&M, etc.)",
                     ),
             )
         }
@@ -71,7 +70,7 @@ internal fun presentationSlides(weatherState: AppWeatherState): List<@Composable
                 "Group",
                 bullets =
                     listOf(
-                        "Two people on outreach and administration, three on development",
+                        "Outreach, administration and development",
                         "Every Tuesday, collaborate in a room",
                     ),
             )
@@ -79,7 +78,10 @@ internal fun presentationSlides(weatherState: AppWeatherState): List<@Composable
         add {
             BulletListSlide(
                 "Risks",
-                bullets = listOf("Lack of users", "Model needs data"),
+                bullets = listOf(
+                    "Lack of monitisation",
+                    "Model needs data"
+                ),
             )
         }
         add {
@@ -92,7 +94,7 @@ internal fun presentationSlides(weatherState: AppWeatherState): List<@Composable
                         "ktlint and detekt for code quality",
                         "Each developer has a different way of working",
                         "Mistral Vibe for writing implementation plans, Vibe Code for implementation",
-                        "ChatGPT for help with implementation",
+                        "Other AI tools for Chat: Claude, subscription hopping",
                     ),
             )
         }
