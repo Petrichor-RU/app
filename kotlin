@@ -284,6 +284,30 @@ kotlin_cli_url="$KOTLIN_CLI_DOWNLOAD_ROOT/org/jetbrains/kotlin/kotlin-cli/$kotli
 kotlin_cli_target_dir="$kotlin_cli_cache_dir/kotlin-cli-$kotlin_cli_version"
 download_and_extract "Kotlin Toolchain distribution v$kotlin_cli_version" "$kotlin_cli_url" "$kotlin_cli_sha256" 256 "$kotlin_cli_cache_dir" "$kotlin_cli_target_dir" "true"
 
+# ********** Petrichor quality gate (ktlint + detekt) **********
+# `build`, `test` and `check` first run the lint module, so style/analysis violations
+# fail the command. Set PETRICHOR_LINT_SKIP=1 to bypass (used internally to avoid recursion).
+petrichor_command=""
+for petrichor_arg in "$@"; do
+  case "$petrichor_arg" in
+    -*) ;; # skip options, the first positional argument is the command
+    *) petrichor_command="$petrichor_arg"; break ;;
+  esac
+done
+case "$petrichor_command" in
+  build|test|check)
+    if [ -z "${PETRICHOR_LINT_SKIP:-}" ]; then
+      petrichor_root="$(dirname "$(realpath "${wrapper_script:-$0}")")"
+      if [ -f "$petrichor_root/project.yaml" ] && [ -f "$petrichor_root/tools/lint.sh" ]; then
+        if ! PETRICHOR_LINT_SKIP=1 /bin/sh "$petrichor_root/tools/lint.sh" "$petrichor_root"; then
+          echo "Quality gate failed: ktlint/detekt reported violations (see above)." >&2
+          exit 1
+        fi
+      fi
+    fi
+    ;;
+esac
+
 # ********** Launch the Kotlin CLI **********
 
 launcher_script="$kotlin_cli_target_dir/bin/launcher.sh"

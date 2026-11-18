@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import okio.Path.Companion.toPath
 import java.io.File
 
-internal actual fun createLocationDataStore(): DataStore<Preferences> = PreferenceDataStoreFactory.createWithPath(
-    produceFile = { File(System.getProperty("user.home"), ".petrichor/$LOCATION_DATASTORE_NAME").absolutePath.toPath() },
-)
+internal actual fun createLocationDataStore(): DataStore<Preferences> =
+    PreferenceDataStoreFactory.createWithPath(
+        produceFile = { File(System.getProperty("user.home"), ".petrichor/$LOCATION_DATASTORE_NAME").absolutePath.toPath() },
+    )

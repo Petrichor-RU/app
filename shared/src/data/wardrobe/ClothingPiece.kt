@@ -12,10 +12,10 @@ import androidx.room3.PrimaryKey
             entity = ClothingType::class,
             parentColumns = ["id"],
             childColumns = ["typeId"],
-            onDelete = ForeignKey.RESTRICT
-        )
+            onDelete = ForeignKey.RESTRICT,
+        ),
     ],
-    indices = [Index("typeId")]
+    indices = [Index("typeId")],
 )
 data class ClothingPiece(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -25,5 +25,10 @@ data class ClothingPiece(
     val notes: String?,
     val imagePath: String,
     val thumbnailPath: String,
-    val createdAt: Long = 0L
+    val createdAt: Long = 0L,
+    // Archived pieces stay linked to journal entries but disappear from the wardrobe,
+    // pickers and recommendations.
+    val archived: Boolean = false,
+    // Laundry: epoch ms until which this piece is blocked; 0 = clean.
+    val laundryUntilEpochMs: Long = 0,
 )

@@ -17,61 +17,64 @@ import kotlin.test.assertEquals
 class LocationListItemTest {
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `item shows its name and region`() = runDesktopComposeUiTest {
-        setContent {
-            MaterialSymbolsRenderingScope {
-                MaterialTheme {
-                    LocationListItem(title = "Utrecht", subtitle = "Utrecht, NL", onClick = {})
+    fun `item shows its name and region`() =
+        runDesktopComposeUiTest {
+            setContent {
+                MaterialSymbolsRenderingScope {
+                    MaterialTheme {
+                        LocationListItem(title = "Utrecht", subtitle = "Utrecht, NL", onClick = {})
+                    }
                 }
             }
-        }
 
-        onNodeWithText("Utrecht", substring = false).assertIsDisplayed()
-        onNodeWithText("Utrecht, NL").assertIsDisplayed()
-    }
+            onNodeWithText("Utrecht", substring = false).assertIsDisplayed()
+            onNodeWithText("Utrecht, NL").assertIsDisplayed()
+        }
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `clicking the item reports a selection`() = runDesktopComposeUiTest {
-        var clicks = 0
-        setContent {
-            MaterialSymbolsRenderingScope {
-                MaterialTheme {
-                    LocationListItem(title = "Rotterdam", onClick = { clicks++ })
+    fun `clicking the item reports a selection`() =
+        runDesktopComposeUiTest {
+            var clicks = 0
+            setContent {
+                MaterialSymbolsRenderingScope {
+                    MaterialTheme {
+                        LocationListItem(title = "Rotterdam", onClick = { clicks++ })
+                    }
                 }
             }
+
+            onNodeWithText("Rotterdam").performClick()
+
+            assertEquals(1, clicks)
         }
-
-        onNodeWithText("Rotterdam").performClick()
-
-        assertEquals(1, clicks)
-    }
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `trailing action is clickable without selecting the item`() = runDesktopComposeUiTest {
-        var selected = 0
-        var removed = 0
-        setContent {
-            MaterialSymbolsRenderingScope {
-                MaterialTheme {
-                    LocationListItem(
-                        title = "Delft",
-                        highlighted = true,
-                        onClick = { selected++ },
-                        trailingAction = {
-                            IconButton(onClick = { removed++ }) {
-                                MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Remove Delft")
-                            }
-                        }
-                    )
+    fun `trailing action is clickable without selecting the item`() =
+        runDesktopComposeUiTest {
+            var selected = 0
+            var removed = 0
+            setContent {
+                MaterialSymbolsRenderingScope {
+                    MaterialTheme {
+                        LocationListItem(
+                            title = "Delft",
+                            highlighted = true,
+                            onClick = { selected++ },
+                            trailingAction = {
+                                IconButton(onClick = { removed++ }) {
+                                    MaterialSymbol(iconName = MaterialSymbols.CLOSE, contentDescription = "Remove Delft")
+                                }
+                            },
+                        )
+                    }
                 }
             }
+
+            onNodeWithContentDescription("Remove Delft").performClick()
+
+            assertEquals(1, removed)
+            assertEquals(0, selected)
         }
-
-        onNodeWithContentDescription("Remove Delft").performClick()
-
-        assertEquals(1, removed)
-        assertEquals(0, selected)
-    }
 }

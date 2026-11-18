@@ -1,6 +1,8 @@
 package nl.petrichor.app.data.wardrobe
 
-enum class Material(val displayName: String) {
+enum class Material(
+    val displayName: String,
+) {
     COTTON("Cotton"),
     WOOL("Wool"),
     POLYESTER("Polyester"),
@@ -8,5 +10,5 @@ enum class Material(val displayName: String) {
     LEATHER("Leather"),
     SILK("Silk"),
     MIX("Mix"),
-    UNKNOWN("Unknown")
+    UNKNOWN("Unknown"),
 }

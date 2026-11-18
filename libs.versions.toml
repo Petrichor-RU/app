@@ -1,7 +1,9 @@
 [versions]
 logback = "1.6.6"
 androidx-activity-compose = "1.13.0"
+androidx-core-ktx = "1.19.1"
 androidx-lifecycle = "2.11.0"
+androidx-work = "2.12.0"
 datastore = "1.3.0"
 kotlinx-coroutines = "1.11.0"
 ktor = "3.6.1"
@@ -11,14 +13,18 @@ reorderable = "3.1.0"
 room = "3.0.3"
 ksp = "2.3.13"
 sqlite = "2.7.1"
-imagepickerkmp = "1.1.7"
-skiko = "0.156.0"
+imagepickerkmp = "1.1.8"
+kim = "0.26.2"
+androidx-exifinterface = "1.4.2"
+skiko = "0.150.1"
 kotlinx-datetime = "0.8.0"
 kizitonwose-calendar = "2.10.1"
 
 [libraries]
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity-compose" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidx-core-ktx" }
+androidx-work-runtime-ktx = { module = "androidx.work:work-runtime-ktx", version.ref = "androidx-work" }
 androidx-lifecycle-viewmodel-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "androidx-lifecycle" }
 androidx-lifecycle-runtime-compose = { module = "org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose", version.ref = "androidx-lifecycle" }
 androidx-datastore-preferences-core = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
@@ -30,7 +36,6 @@ ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
 ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
-kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.12.0" }
 compass-geolocation = { module = "dev.jordond.compass:geolocation", version.ref = "compass" }
 compass-geolocation-mobile = { module = "dev.jordond.compass:geolocation-mobile", version.ref = "compass" }
 compass-geolocation-browser = { module = "dev.jordond.compass:geolocation-browser", version.ref = "compass" }
@@ -41,6 +46,8 @@ androidx-room-runtime = { group = "androidx.room3", name = "room3-runtime", vers
 sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
 sqlite-web = { module = "androidx.sqlite:sqlite-web", version.ref = "sqlite" }
 imagepickerkmp = { module = "io.github.ismoy:imagepickerkmp", version.ref = "imagepickerkmp" }
+kim = { module = "com.ashampoo:kim", version.ref = "kim" }
+androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "androidx-exifinterface" }
 skiko-awt-runtime-linux-x64 = { module = "org.jetbrains.skiko:skiko-awt-runtime-linux-x64", version.ref = "skiko" }
 kizitonwose-calendar = { module = "com.kizitonwose.calendar:compose-multiplatform", version.ref = "kizitonwose-calendar" }
 

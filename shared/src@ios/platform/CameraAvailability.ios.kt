@@ -5,5 +5,5 @@ import platform.UIKit.UIImagePickerControllerSourceType
 
 actual fun isCameraAvailable(): Boolean =
     UIImagePickerController.isSourceTypeAvailable(
-        UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera
+        UIImagePickerControllerSourceType.UIImagePickerControllerSourceTypeCamera,
     )
