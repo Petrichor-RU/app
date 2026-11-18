@@ -1,5 +1,6 @@
 package nl.petrichor.app.platform
 
+import platform.Foundation.NSDateComponents
 import platform.UserNotifications.UNCalendarNotificationTrigger
 import platform.UserNotifications.UNMutableNotificationContent
 import platform.UserNotifications.UNNotificationRequest
@@ -54,8 +55,9 @@ actual object NotificationScheduler {
                 setUserInfo(mapOf("action" to spec.action))
             }
 
-        @Suppress("DEPRECATION")
-        val trigger = UNCalendarNotificationTrigger()
+        val dateComponents = NSDateComponents()
+        dateComponents.hour = spec.hour.toLong()
+        val trigger = UNCalendarNotificationTrigger.triggerWithDateMatchingComponents(dateComponents, repeats = true)
         val request = UNNotificationRequest.requestWithIdentifier(spec.identifier, content, trigger)
         center.addNotificationRequest(request) { _ -> }
     }
