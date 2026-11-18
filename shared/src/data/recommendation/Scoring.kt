@@ -17,7 +17,7 @@ internal object Scoring {
 
     /** MODEL: predicted feeling score clamped to 1..5. */
     fun modelScore(
-        input: RecommendationInput,
+            input: RecommendationInput,
         candidate: OutfitCandidate,
         typeById: Map<Long, ClothingType>,
     ): Double {
