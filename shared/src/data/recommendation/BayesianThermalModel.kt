@@ -40,9 +40,13 @@ internal data class BayesianThermalStep(
 /**
  * Online ordinal probit model using Assumed-Density Filtering (Chu & Ghahramani / Minka)
  * with unit observation noise `sigma = 1` and symmetric thresholds `(-tau, +tau)`.
+ * Uses pooled rain/wind condition priors (`10..13`) and strongly shrunk per-garment dry-warmth
+ * residuals (`14+`) with variance [GARMENT_PRIOR_VARIANCE]; unseen or rarely worn pieces retain
+ * zero residual mean and [GARMENT_PRIOR_VARIANCE] epistemic variance.
  */
 internal object BayesianThermalModel {
     const val DEFAULT_THRESHOLD = 0.75
+    const val GARMENT_PRIOR_VARIANCE = 0.06
     private const val PRIOR_IDEAL_INTERCEPT = 2.4
     private const val PRIOR_IDEAL_SLOPE = 0.07
     private const val PRIOR_RAINY_IDEAL_BONUS = 0.2
@@ -51,25 +55,26 @@ internal object BayesianThermalModel {
     private const val OFFSET_PRIOR_VARIANCE = 0.8
     private const val LINEAR_PRIOR_VARIANCE = 0.15
     private const val INTERACTION_PRIOR_VARIANCE = 0.06
-    private const val EXTRA_FEATURE_PRIOR_VARIANCE = 0.05
+    private const val CONDITION_PRIOR_VARIANCE = 0.4
     private const val MIN_VARIANCE = 1e-9
     private const val TAIL_GUARD_Z = 6.0
     private const val MAX_DELTA2 = 0.999999
     private const val FIRST_INTERACTION_INDEX = 7
     private const val LAST_CORE_INTERACTION_INDEX = 9
 
-    fun defaultPriorVariances(dimension: Int = FeatureExtractor.FEATURE_COUNT): DoubleArray =
+    fun defaultPriorVariances(dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT): DoubleArray =
         DoubleArray(dimension) { index ->
             when {
                 index == 0 -> OFFSET_PRIOR_VARIANCE
                 index < FIRST_INTERACTION_INDEX -> LINEAR_PRIOR_VARIANCE
                 index <= LAST_CORE_INTERACTION_INDEX -> INTERACTION_PRIOR_VARIANCE
-                else -> EXTRA_FEATURE_PRIOR_VARIANCE
+                index < FeatureExtractor.CORE_FEATURE_COUNT -> CONDITION_PRIOR_VARIANCE
+                else -> GARMENT_PRIOR_VARIANCE
             }
         }
 
     fun prior(
-        dimension: Int = FeatureExtractor.FEATURE_COUNT,
+        dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT,
         thresholdTau: Double = DEFAULT_THRESHOLD,
         priorVariances: DoubleArray = defaultPriorVariances(dimension),
     ): ThermalPosterior {
@@ -124,7 +129,7 @@ internal object BayesianThermalModel {
 
     fun fitReplay(
         steps: List<BayesianThermalStep>,
-        dimension: Int = steps.firstOrNull()?.features?.size ?: FeatureExtractor.FEATURE_COUNT,
+        dimension: Int = steps.firstOrNull()?.features?.size ?: FeatureExtractor.CORE_FEATURE_COUNT,
         thresholdTau: Double = DEFAULT_THRESHOLD,
         priorVariances: DoubleArray = defaultPriorVariances(dimension),
     ): ThermalPosterior {
@@ -139,10 +144,13 @@ internal object BayesianThermalModel {
         posterior: ThermalPosterior,
         raw: RawOutfitSignals,
         features: DoubleArray,
+        unseenPieceCount: Int = 0,
+        garmentPriorVariance: Double = GARMENT_PRIOR_VARIANCE,
     ): ThermalProbabilities {
         val x = mk.ndarray(features)
         val mu = priorSensation(raw) + StatsFacade.dot(x, posterior.mean)
-        val epistemicVar = MultikOps.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
+        val activeVar = MultikOps.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
+        val epistemicVar = (activeVar + unseenPieceCount * garmentPriorVariance).coerceAtLeast(0.0)
         val s = sqrt(1.0 + epistemicVar)
         val tau = posterior.thresholdTau
         val zCold = (-tau - mu) / s
@@ -170,10 +178,23 @@ internal object BayesianThermalModel {
         isRainy: Boolean,
         pieces: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
+        windSpeedMs: Double? = null,
+        precipitationProbability: Double? = null,
+        rainVolumeMm: Double? = null,
     ): ThermalProbabilities {
-        val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
-        val features = FeatureExtractor.buildFeatures(raw, model.scaler)
-        return predict(model.thermalPosterior, raw, features)
+        val raw =
+            FeatureExtractor.extractRaw(
+                tempC = tempC,
+                isRainy = isRainy,
+                pieces = pieces,
+                typeById = typeById,
+                windSpeedMs = windSpeedMs,
+                precipitationProbability = precipitationProbability,
+                rainVolumeMm = rainVolumeMm,
+            )
+        val features = FeatureExtractor.buildFeatures(raw, model.scaler, pieces, model.activePieceIndexById)
+        val unseenCount = FeatureExtractor.countUnseenPieces(pieces, model.activePieceIndexById)
+        return predict(model.thermalPosterior, raw, features, unseenPieceCount = unseenCount)
     }
 
     /**
@@ -232,7 +253,7 @@ internal object BayesianThermalModel {
                     val phiA = StatsFacade.standardNormalPdf(alpha)
                     val phiB = StatsFacade.standardNormalPdf(beta)
                     val d1 = (phiA - phiB) / z
-                    val d2 = (d1 * d1 + (alpha * phiA - beta * phiB) / z).coerceIn(0.0, MAX_DELTA2)
+                    val d2 = (d1 * d1 - (alpha * phiA - beta * phiB) / z).coerceIn(0.0, MAX_DELTA2)
                     d1 to d2
                 }
             }
@@ -261,7 +282,7 @@ internal object BayesianThermalModel {
             else -> {
                 val d1 = (1.0 - ratioExp) / denom
                 val bracket = (alpha - beta * ratioExp) / denom
-                val d2 = (d1 * d1 + bracket).coerceIn(0.0, MAX_DELTA2)
+                val d2 = (d1 * d1 - bracket).coerceIn(0.0, MAX_DELTA2)
                 d1 to d2
             }
         }

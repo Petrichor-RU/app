@@ -429,7 +429,7 @@ class RecommendationEngineTest {
     }
 
     private fun testArtifactState(
-        weights: List<Double> = listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        weights: List<Double> = List(FeatureExtractor.CORE_FEATURE_COUNT) { 0.0 },
         schemaVersion: Int = ModelState.CURRENT_SCHEMA_VERSION,
     ): ModelState {
         val scaler = FeatureScaler(15.0, 5.0, 0.5, 0.25, 0.4, 0.2, 0.0, 1.0, 1.0, 0.5, 0.9, 0.4)
@@ -468,7 +468,7 @@ class RecommendationEngineTest {
         val heuristicResult = RecommendationEngine.recommendOutfits(testInput)
         assertTrue(heuristicResult.any { it.loggedEntry?.entry?.id == 1L && it.selfiePath == "selfie.jpg" })
 
-        val modelState = testArtifactState(weights = listOf(-2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
+        val modelState = testArtifactState(weights = List(FeatureExtractor.CORE_FEATURE_COUNT) { idx -> if (idx == 0) -2.0 else 0.0 })
         val modelResult =
             RecommendationEngine.recommendOutfits(
                 input(pieces = listOf(tee, jeans), entries = listOf(selfieOnly), surveyedCount = 12, modelState = modelState, tempC = 15.0),

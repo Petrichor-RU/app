@@ -39,6 +39,7 @@ import nl.petrichor.app.data.media.loadImagePainter
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
+import nl.petrichor.app.data.wardrobe.WeatherProtection
 import nl.petrichor.app.ui.epochMsToLocalDate
 import nl.petrichor.app.ui.isLaundryActive
 import nl.petrichor.app.ui.shortLabel
@@ -308,6 +309,14 @@ private fun ClothingDetails(
                 icon = MaterialSymbols.DESCRIPTION,
                 label = "Material",
                 value = material.displayName,
+            )
+        }
+
+        clothing.weatherProtection.takeUnless { it == WeatherProtection.NONE }?.let { protection ->
+            DetailRow(
+                icon = MaterialSymbols.SHIELD,
+                label = "Weather protection",
+                value = protection.displayName,
             )
         }
 

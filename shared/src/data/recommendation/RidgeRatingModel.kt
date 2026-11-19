@@ -14,9 +14,10 @@ import kotlin.math.min
 /**
  * Prior-plus-residual ridge regression model backed by `multik-kotlin`.
  *
- * Fits residuals `r_i = y_i - priorPrediction(x_i)` with a fixed prior precision `lambda`
- * (independent of `n`, aligning with Gaussian prior variance `sigma^2 / lambda`) and solves
- * `(X^T X + Lambda) beta = X^T r` via PLU decomposition, keeping the intercept unpenalised.
+ * Fits residuals `r_i = y_i - priorPrediction(x_i)` over the core condition-aware feature vector
+ * with a fixed prior precision `lambda` (independent of `n`, aligning with Gaussian prior variance
+ * `sigma^2 / lambda`) and solves `(X^T X + Lambda) beta = X^T r` via PLU decomposition, keeping
+ * the intercept unpenalised.
  */
 internal object RidgeRatingModel {
     const val DEFAULT_PRIOR_PRECISION = 1.0
@@ -31,7 +32,7 @@ internal object RidgeRatingModel {
         priorPrecision: Double = DEFAULT_PRIOR_PRECISION,
     ): RecommendationModelArtifact {
         val precisionDiagonal =
-            DoubleArray(FeatureExtractor.FEATURE_COUNT) { idx ->
+            DoubleArray(FeatureExtractor.CORE_FEATURE_COUNT) { idx ->
                 if (idx == 0) 0.0 else priorPrecision
             }
         return fitWithDiagonalPrecision(samples, precisionDiagonal)
@@ -42,17 +43,17 @@ internal object RidgeRatingModel {
         precisionDiagonal: DoubleArray,
     ): RecommendationModelArtifact {
         require(samples.isNotEmpty()) { "Cannot fit a ridge model without samples" }
-        require(precisionDiagonal.size == FeatureExtractor.FEATURE_COUNT) {
-            "Expected ${FeatureExtractor.FEATURE_COUNT} precision entries"
+        val d = FeatureExtractor.CORE_FEATURE_COUNT
+        require(precisionDiagonal.size == d) {
+            "Expected $d precision entries"
         }
         val rawSignals = samples.map { it.first }
         val scaler = FeatureScaler.fit(rawSignals)
         val n = samples.size
-        val d = FeatureExtractor.FEATURE_COUNT
         val xMatrix = mk.zeros<Double>(n, d)
         val residuals =
             DoubleArray(n) { row ->
-                val features = FeatureExtractor.buildFeatures(rawSignals[row], scaler)
+                val features = FeatureExtractor.buildCoreFeatures(rawSignals[row], scaler)
                 for (col in 0 until d) {
                     xMatrix[row, col] = features[col]
                 }
@@ -83,19 +84,37 @@ internal object RidgeRatingModel {
         isRainy: Boolean,
         pieces: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
+        windSpeedMs: Double? = null,
+        precipitationProbability: Double? = null,
+        rainVolumeMm: Double? = null,
     ): Double {
-        val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
-        val features = FeatureExtractor.buildFeatures(raw, model.scaler)
-        return predictFromFeatures(raw, features, model.weights)
+        val raw =
+            FeatureExtractor.extractRaw(
+                tempC = tempC,
+                isRainy = isRainy,
+                pieces = pieces,
+                typeById = typeById,
+                windSpeedMs = windSpeedMs,
+                precipitationProbability = precipitationProbability,
+                rainVolumeMm = rainVolumeMm,
+            )
+        val features = FeatureExtractor.buildCoreFeatures(raw, model.scaler)
+        val coreWeights =
+            if (model.weights.size == FeatureExtractor.CORE_FEATURE_COUNT) {
+                model.weights
+            } else {
+                mk.ndarray(DoubleArray(FeatureExtractor.CORE_FEATURE_COUNT) { idx -> model.weights[idx] })
+            }
+        return predictFromFeatures(raw, features, coreWeights)
     }
 
     fun predict(
         artifact: RecommendationModelArtifact,
         raw: RawOutfitSignals,
     ): Double {
-        val features = FeatureExtractor.buildFeatures(raw, artifact.scaler)
-        val weights = mk.ndarray(artifact.ridgeWeights.toDoubleArray())
-        return predictFromFeatures(raw, features, weights)
+        val features = FeatureExtractor.buildCoreFeatures(raw, artifact.scaler)
+        val coreWeights = mk.ndarray(DoubleArray(FeatureExtractor.CORE_FEATURE_COUNT) { idx -> artifact.ridgeWeights[idx] })
+        return predictFromFeatures(raw, features, coreWeights)
     }
 
     private fun predictFromFeatures(

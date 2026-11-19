@@ -2,7 +2,6 @@ package nl.petrichor.app.ui.wardrobe
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +14,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -41,13 +38,14 @@ import io.github.ismoy.imagepickerkmp.config.GalleryConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerKMPConfig
 import io.github.ismoy.imagepickerkmp.picker.ImagePickerResult
 import io.github.ismoy.imagepickerkmp.picker.rememberImagePickerKMP
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.media.MediaStorage
 import nl.petrichor.app.data.media.loadImagePainter
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
+import nl.petrichor.app.data.wardrobe.WeatherProtection
 import nl.petrichor.app.platform.isCameraAvailable
 
 /**
@@ -69,10 +67,11 @@ fun AddClothingDialog(
     var selectedMaterial by remember {
         mutableStateOf(clothing?.material?.takeUnless { it == Material.UNKNOWN })
     }
+    var selectedProtection by remember {
+        mutableStateOf(clothing?.weatherProtection ?: WeatherProtection.NONE)
+    }
     var notes by remember { mutableStateOf(clothing?.notes.orEmpty()) }
     var isSaving by remember { mutableStateOf(false) }
-    var showTypeMenu by remember { mutableStateOf(false) }
-    var showMaterialMenu by remember { mutableStateOf(false) }
     var saveError by remember { mutableStateOf<String?>(null) }
     var useNewImage by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -240,88 +239,31 @@ fun AddClothingDialog(
                     singleLine = true,
                 )
 
-                // Type selection with dropdown
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Type (required):", style = MaterialTheme.typography.bodySmall)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            Modifier.fillMaxWidth().clickable {
-                                showTypeMenu = true
-                            },
-                    ) {
-                        Text(
-                            text =
-                                clothingTypes.firstOrNull { it.id == selectedTypeId }?.name
-                                    ?: "Select type (required)",
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { showTypeMenu = true }) {
-                            MaterialSymbol(
-                                iconName = MaterialSymbols.ARROW_DROP_DOWN,
-                                contentDescription = "Select type",
-                            )
-                        }
+                ClothingMetadataDropdown(
+                    label = "Type (required):",
+                    selectedText = clothingTypes.firstOrNull { it.id == selectedTypeId }?.name ?: "Select type (required)",
+                    iconContentDescription = "Select type",
+                    options = clothingTypes.map { it.id to it.name },
+                    onOptionSelected = { selectedTypeId = it },
+                )
 
-                        DropdownMenu(
-                            expanded = showTypeMenu,
-                            onDismissRequest = { showTypeMenu = false },
-                        ) {
-                            clothingTypes.forEach { type ->
-                                DropdownMenuItem(
-                                    text = { Text(type.name) },
-                                    onClick = {
-                                        selectedTypeId = type.id
-                                        showTypeMenu = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+                ClothingMetadataDropdown(
+                    label = "Material (optional):",
+                    selectedText = selectedMaterial?.displayName ?: "Not selected",
+                    iconContentDescription = "Select material",
+                    options =
+                        listOf<Pair<Material?, String>>(null to "Not selected") +
+                            Material.entries.filter { it != Material.UNKNOWN }.map { it to it.displayName },
+                    onOptionSelected = { selectedMaterial = it },
+                )
 
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("Material (optional):", style = MaterialTheme.typography.bodySmall)
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier =
-                            Modifier.fillMaxWidth().clickable {
-                                showMaterialMenu = true
-                            },
-                    ) {
-                        Text(
-                            text = selectedMaterial?.displayName ?: "Not selected",
-                            modifier = Modifier.weight(1f),
-                        )
-                        IconButton(onClick = { showMaterialMenu = true }) {
-                            MaterialSymbol(
-                                iconName = MaterialSymbols.ARROW_DROP_DOWN,
-                                contentDescription = "Select material",
-                            )
-                        }
-                        DropdownMenu(
-                            expanded = showMaterialMenu,
-                            onDismissRequest = { showMaterialMenu = false },
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Not selected") },
-                                onClick = {
-                                    selectedMaterial = null
-                                    showMaterialMenu = false
-                                },
-                            )
-                            Material.entries.filter { it != Material.UNKNOWN }.forEach { material ->
-                                DropdownMenuItem(
-                                    text = { Text(material.displayName) },
-                                    onClick = {
-                                        selectedMaterial = material
-                                        showMaterialMenu = false
-                                    },
-                                )
-                            }
-                        }
-                    }
-                }
+                ClothingMetadataDropdown(
+                    label = "Weather protection (optional):",
+                    selectedText = selectedProtection.displayName,
+                    iconContentDescription = "Select weather protection",
+                    options = WeatherProtection.entries.map { it to it.displayName },
+                    onOptionSelected = { selectedProtection = it },
+                )
 
                 // Notes field
                 OutlinedTextField(
@@ -378,16 +320,16 @@ fun AddClothingDialog(
                                     name = name.ifEmpty { null },
                                     typeId = typeId,
                                     material = selectedMaterial ?: Material.UNKNOWN,
+                                    weatherProtection = selectedProtection,
                                     notes = notes.ifEmpty { null },
                                     imagePath = imagePath,
                                     thumbnailPath = imagePath,
                                 ),
                             )
-                            isSaving = false
-                        } catch (exception: CancellationException) {
-                            throw exception
                         } catch (exception: Exception) {
+                            coroutineContext.ensureActive()
                             saveError = "Could not save clothing image: ${exception.message ?: "Unknown error"}"
+                        } finally {
                             isSaving = false
                         }
                     }

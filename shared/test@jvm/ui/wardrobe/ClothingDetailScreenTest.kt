@@ -14,6 +14,7 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
+import nl.petrichor.app.data.wardrobe.WeatherProtection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -122,6 +123,33 @@ class ClothingDetailScreenTest {
                     onNodeWithText("In laundry until").performScrollTo().assertIsDisplayed()
                 } else {
                     onNodeWithText("In laundry until").assertDoesNotExist()
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `weather protection row is shown only when protection is not NONE`() {
+        for (protection in listOf(WeatherProtection.NONE, WeatherProtection.WATER_RESISTANT)) {
+            runDesktopComposeUiTest(width = 360, height = 800) {
+                setContent {
+                    MaterialSymbolsRenderingScope {
+                        MaterialTheme {
+                            ClothingDetailScreen(
+                                clothing = clothing.copy(weatherProtection = protection),
+                                clothingType = clothingType,
+                                onDismiss = {},
+                                onEdit = {},
+                                onDelete = {},
+                            )
+                        }
+                    }
+                }
+                if (protection == WeatherProtection.NONE) {
+                    onNodeWithText("Weather protection").assertDoesNotExist()
+                } else {
+                    onNodeWithText("Weather protection").performScrollTo().assertIsDisplayed()
+                    onNodeWithText(protection.displayName).performScrollTo().assertIsDisplayed()
                 }
             }
         }

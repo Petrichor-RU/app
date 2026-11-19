@@ -131,7 +131,7 @@ class WardrobeRepositoryTest {
     }
 
     @Test
-    fun `updateClothing retrains only when type or material changes on a worn piece`() =
+    fun `updateClothing retrains only when type material or weatherProtection changes on a worn piece`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val clothingDao = FakeClothingDao()
@@ -167,6 +167,11 @@ class WardrobeRepositoryTest {
             advanceUntilIdle()
             assertEquals(0L, coordinator.dataRevision.value)
 
+            // Weather protection edit on unworn piece does not trigger retrain.
+            repository.updateClothing(unwornPiece.copy(material = Material.WOOL, weatherProtection = WeatherProtection.WATERPROOF))
+            advanceUntilIdle()
+            assertEquals(0L, coordinator.dataRevision.value)
+
             // Type edit on worn piece DOES trigger retrain.
             repository.updateClothing(wornPiece.copy(typeId = 2L))
             advanceUntilIdle()
@@ -176,6 +181,13 @@ class WardrobeRepositoryTest {
             repository.updateClothing(wornPiece.copy(typeId = 2L, material = Material.WOOL))
             advanceUntilIdle()
             assertEquals(2L, coordinator.dataRevision.value)
+
+            // Weather protection edit on worn piece DOES trigger retrain.
+            repository.updateClothing(
+                wornPiece.copy(typeId = 2L, material = Material.WOOL, weatherProtection = WeatherProtection.WATER_RESISTANT),
+            )
+            advanceUntilIdle()
+            assertEquals(3L, coordinator.dataRevision.value)
         }
 
     private fun clothing(createdAt: Long) =

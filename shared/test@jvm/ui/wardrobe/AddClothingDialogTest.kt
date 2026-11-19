@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
 import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import kotlinx.coroutines.CancellationException
@@ -17,12 +18,16 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
+import nl.petrichor.app.data.wardrobe.WeatherProtection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class AddClothingDialogTest {
-    private fun DesktopComposeUiTest.setDialog(onSave: suspend (ClothingPiece) -> Unit) {
+    private fun DesktopComposeUiTest.setDialog(
+        weatherProtection: WeatherProtection = WeatherProtection.NONE,
+        onSave: suspend (ClothingPiece) -> Unit,
+    ) {
         setContent {
             MaterialSymbolsRenderingScope {
                 MaterialTheme {
@@ -32,6 +37,7 @@ class AddClothingDialogTest {
                                 name = "White tee",
                                 typeId = 10,
                                 material = Material.COTTON,
+                                weatherProtection = weatherProtection,
                                 notes = null,
                                 imagePath = "",
                                 thumbnailPath = "",
@@ -44,6 +50,33 @@ class AddClothingDialogTest {
             }
         }
     }
+
+    @Test
+    fun `edit mode preserves existing weather protection on save`() =
+        runDesktopComposeUiTest(width = 1024, height = 1600) {
+            var saved: ClothingPiece? = null
+            setDialog(weatherProtection = WeatherProtection.WATERPROOF) { saved = it }
+
+            onNodeWithText("Waterproof").performScrollTo().assertIsDisplayed()
+            onNodeWithText("Save Changes").performClick()
+            waitForIdle()
+
+            assertEquals(WeatherProtection.WATERPROOF, saved?.weatherProtection)
+        }
+
+    @Test
+    fun `edit mode allows changing weather protection selection`() =
+        runDesktopComposeUiTest(width = 1024, height = 1600) {
+            var saved: ClothingPiece? = null
+            setDialog(weatherProtection = WeatherProtection.WATERPROOF) { saved = it }
+
+            onNodeWithText("Waterproof").performScrollTo().performClick()
+            onNodeWithText("Wind-resistant").performClick()
+            onNodeWithText("Save Changes").performClick()
+            waitForIdle()
+
+            assertEquals(WeatherProtection.WIND_RESISTANT, saved?.weatherProtection)
+        }
 
     @Test
     fun `ordinary save failure is shown and allows retry`() {

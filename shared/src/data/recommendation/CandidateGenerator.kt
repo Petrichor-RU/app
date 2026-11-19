@@ -16,6 +16,7 @@ import kotlin.math.abs
  */
 internal object CandidateGenerator {
     private const val OUTER_MAX_TEMP_C = 14.0
+    private const val RAIN_OUTER_EXPOSURE_THRESHOLD = 0.5
     private const val TOP_K_UPPER_BASE = 2
     private const val TOP_K_UPPER_OUTER = 2
     private const val TOP_K_LOWER = 3
@@ -114,7 +115,7 @@ internal object CandidateGenerator {
         source: RecommendationSource,
     ): List<OutfitCandidate> {
         val tempC = input.tempC ?: return emptyList()
-        val options = buildLayerOptions(pool, typeById, tempC, Scoring.idealWarmth(input, typeById))
+        val options = buildLayerOptions(input, pool, typeById, tempC, Scoring.idealWarmth(input, typeById))
         return combinationsOf(options)
             .take(RecommendationEngine.MAX_CONSTRUCTED_CANDIDATES)
             .map { pieces ->
@@ -123,26 +124,15 @@ internal object CandidateGenerator {
     }
 
     private fun buildLayerOptions(
+        input: RecommendationInput,
         pool: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
         tempC: Double,
         ideal: Double,
     ): LayerOptions {
         val byZone = pool.groupBy { groupZoneFor(typeById[it.typeId]?.supertype ?: ClothingSupertype.ACCESSORIES) }
-        val offerOuter = tempC < OUTER_MAX_TEMP_C
-        val upperPool = byZone[CoverageZone.UPPER].orEmpty()
-        val (outerUpperPool, baseUpperPool) = upperPool.partition { typeById[it.typeId]?.name in OUTER_TYPE_NAMES }
-        val upperTarget = ideal * (ZONE_SHARE[CoverageZone.UPPER] ?: 0.0)
-        val baseTarget = if (offerOuter && outerUpperPool.isNotEmpty()) upperTarget * BASE_WITH_OUTER_SHARE else upperTarget
-
-        val selectedBases = rankByTarget(baseUpperPool, typeById, baseTarget, TOP_K_UPPER_BASE)
-        val outerTarget = if (selectedBases.isNotEmpty()) upperTarget * (1.0 - BASE_WITH_OUTER_SHARE) else upperTarget
-        val selectedOuters =
-            if (offerOuter || baseUpperPool.isEmpty()) {
-                rankByTarget(outerUpperPool, typeById, outerTarget, TOP_K_UPPER_OUTER)
-            } else {
-                emptyList()
-            }
+        val (selectedBases, selectedOuters, offerOuter) =
+            selectUpperLayers(input, byZone[CoverageZone.UPPER].orEmpty(), typeById, tempC, ideal)
 
         return LayerOptions(
             upperBases = selectedBases,
@@ -178,6 +168,33 @@ internal object CandidateGenerator {
             accessories = rankByTarget(byZone[CoverageZone.ACCESSORIES].orEmpty(), typeById, 0.0, TOP_K_ACCESSORIES),
             offerOuter = offerOuter,
         )
+    }
+
+    private fun selectUpperLayers(
+        input: RecommendationInput,
+        upperPool: List<ClothingPiece>,
+        typeById: Map<Long, ClothingType>,
+        tempC: Double,
+        ideal: Double,
+    ): Triple<List<ClothingPiece>, List<ClothingPiece>, Boolean> {
+        val (outerUpperPool, baseUpperPool) = upperPool.partition { typeById[it.typeId]?.name in OUTER_TYPE_NAMES }
+        val coldOuter = tempC < OUTER_MAX_TEMP_C
+        val rainOuterPool = outerUpperPool.filter { it.weatherProtection.hasRainProtection }
+        val rainOuter = (input.isRainy || input.rainExposure >= RAIN_OUTER_EXPOSURE_THRESHOLD) && rainOuterPool.isNotEmpty()
+        val offerOuter = coldOuter || rainOuter
+        val eligibleOuterPool = if (coldOuter || baseUpperPool.isEmpty()) outerUpperPool else rainOuterPool
+
+        val upperTarget = ideal * (ZONE_SHARE[CoverageZone.UPPER] ?: 0.0)
+        val baseTarget = if (offerOuter && eligibleOuterPool.isNotEmpty()) upperTarget * BASE_WITH_OUTER_SHARE else upperTarget
+        val selectedBases = rankByTarget(baseUpperPool, typeById, baseTarget, TOP_K_UPPER_BASE)
+        val outerTarget = if (selectedBases.isNotEmpty()) upperTarget * (1.0 - BASE_WITH_OUTER_SHARE) else upperTarget
+        val selectedOuters =
+            if (offerOuter || baseUpperPool.isEmpty()) {
+                rankByTarget(eligibleOuterPool, typeById, outerTarget, TOP_K_UPPER_OUTER)
+            } else {
+                emptyList()
+            }
+        return Triple(selectedBases, selectedOuters, offerOuter)
     }
 
     private fun combinationsOf(options: LayerOptions): List<List<ClothingPiece>> {

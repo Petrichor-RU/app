@@ -135,12 +135,14 @@ class OutfitLogRepositoryTest {
             val dao = FakeOutfitDao()
             val repository = OutfitLogRepository(dao, FakeClothingDao(), Dispatchers.Unconfined, imageDeleter = {})
 
+            val before = OutfitLogRepository.laundryUntilEpochMs(0)
             repository.markOutfitLaundry(3L, 2)
+            val after = OutfitLogRepository.laundryUntilEpochMs(0)
 
             val (id, until) = dao.laundryMarks.single()
             assertEquals(3L, id)
-            val delta = until - OutfitLogRepository.laundryUntilEpochMs(0)
-            assertEquals(2L * 24 * 60 * 60 * 1000, delta)
+            val expectedMs = 2L * 24 * 60 * 60 * 1000
+            assertTrue(until - before >= expectedMs && until - after <= expectedMs)
             assertEquals(1, repository.laundryVersion.value)
         }
 

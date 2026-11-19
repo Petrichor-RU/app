@@ -37,34 +37,37 @@ internal data class BayesianRatingStep(
  * Recursive Bayesian linear rating model using Joseph-form Kalman filter updates on Multik
  * arrays.
  *
- * Models residuals around [RidgeRatingModel.priorPrediction] with diagonal prior covariance
- * (wider on the personal offset at index 0, narrower on interaction and quadratic terms).
- * Gentle daily drift is applied strictly to `P[0, 0]` and capped at its prior variance so
- * long wear gaps never explode uncertainty.
+ * Models residuals around [RidgeRatingModel.priorPrediction] with diagonal prior covariance:
+ * wide on personal offset (`0`), moderate on linear (`1..6`) and condition/protection (`10..13`)
+ * effects, narrower on interactions (`7..9`), and strongly shrunk on active per-garment dry
+ * residuals (`14+`) with variance [GARMENT_PRIOR_VARIANCE]. Unseen or rarely worn pieces inherit
+ * zero residual mean while retaining [GARMENT_PRIOR_VARIANCE] epistemic variance per piece.
  */
 internal object BayesianRatingModel {
     const val DEFAULT_OBSERVATION_VARIANCE = 0.64
     const val DEFAULT_OFFSET_DRIFT_PER_DAY = 0.002
     const val OFFSET_PRIOR_VARIANCE = 2.0
+    const val GARMENT_PRIOR_VARIANCE = 0.08
     private const val LINEAR_PRIOR_VARIANCE = 0.8
     private const val INTERACTION_PRIOR_VARIANCE = 0.4
-    private const val EXTRA_FEATURE_PRIOR_VARIANCE = 0.25
+    private const val CONDITION_PRIOR_VARIANCE = 0.8
     private const val MIN_VARIANCE = 1e-9
     private const val FIRST_INTERACTION_INDEX = 7
     private const val LAST_CORE_INTERACTION_INDEX = 9
 
-    fun defaultPriorVariances(dimension: Int = FeatureExtractor.FEATURE_COUNT): DoubleArray =
+    fun defaultPriorVariances(dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT): DoubleArray =
         DoubleArray(dimension) { index ->
             when {
                 index == 0 -> OFFSET_PRIOR_VARIANCE
                 index < FIRST_INTERACTION_INDEX -> LINEAR_PRIOR_VARIANCE
                 index <= LAST_CORE_INTERACTION_INDEX -> INTERACTION_PRIOR_VARIANCE
-                else -> EXTRA_FEATURE_PRIOR_VARIANCE
+                index < FeatureExtractor.CORE_FEATURE_COUNT -> CONDITION_PRIOR_VARIANCE
+                else -> GARMENT_PRIOR_VARIANCE
             }
         }
 
     fun prior(
-        dimension: Int = FeatureExtractor.FEATURE_COUNT,
+        dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT,
         priorVariances: DoubleArray = defaultPriorVariances(dimension),
     ): RatingPosterior {
         require(priorVariances.size == dimension) {
@@ -133,7 +136,7 @@ internal object BayesianRatingModel {
 
     fun fitReplay(
         steps: List<BayesianRatingStep>,
-        dimension: Int = steps.firstOrNull()?.features?.size ?: FeatureExtractor.FEATURE_COUNT,
+        dimension: Int = steps.firstOrNull()?.features?.size ?: FeatureExtractor.CORE_FEATURE_COUNT,
         priorVariances: DoubleArray = defaultPriorVariances(dimension),
         observationVariance: Double = DEFAULT_OBSERVATION_VARIANCE,
         qOffset: Double = DEFAULT_OFFSET_DRIFT_PER_DAY,
@@ -154,17 +157,21 @@ internal object BayesianRatingModel {
         return posterior
     }
 
+    @Suppress("LongParameterList") // mathematical prediction parameters including unseen-garment variance
     fun predict(
         posterior: RatingPosterior,
         raw: RawOutfitSignals,
         features: DoubleArray,
         observationVariance: Double = DEFAULT_OBSERVATION_VARIANCE,
+        unseenPieceCount: Int = 0,
+        garmentPriorVariance: Double = GARMENT_PRIOR_VARIANCE,
     ): RatingPrediction {
         val x = mk.ndarray(features)
         val prior = RidgeRatingModel.priorPrediction(raw)
         val residualMean = StatsFacade.dot(x, posterior.mean)
         val unclipped = prior + residualMean
-        val epistemicVar = MultikOps.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
+        val activeVar = MultikOps.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
+        val epistemicVar = (activeVar + unseenPieceCount * garmentPriorVariance).coerceAtLeast(0.0)
         return RatingPrediction(
             mean = unclipped.coerceIn(1.0, 5.0),
             unclippedMean = unclipped,
@@ -179,9 +186,22 @@ internal object BayesianRatingModel {
         isRainy: Boolean,
         pieces: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
+        windSpeedMs: Double? = null,
+        precipitationProbability: Double? = null,
+        rainVolumeMm: Double? = null,
     ): RatingPrediction {
-        val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
-        val features = FeatureExtractor.buildFeatures(raw, model.scaler)
-        return predict(model.ratingPosterior, raw, features)
+        val raw =
+            FeatureExtractor.extractRaw(
+                tempC = tempC,
+                isRainy = isRainy,
+                pieces = pieces,
+                typeById = typeById,
+                windSpeedMs = windSpeedMs,
+                precipitationProbability = precipitationProbability,
+                rainVolumeMm = rainVolumeMm,
+            )
+        val features = FeatureExtractor.buildFeatures(raw, model.scaler, pieces, model.activePieceIndexById)
+        val unseenCount = FeatureExtractor.countUnseenPieces(pieces, model.activePieceIndexById)
+        return predict(model.ratingPosterior, raw, features, unseenPieceCount = unseenCount)
     }
 }

@@ -49,6 +49,9 @@ data class RecommendationInput(
     val entries: List<OutfitEntryWithPieces>,
     val surveyedCount: Int,
     val modelState: ModelState?,
+    val windSpeedMs: Double? = null,
+    val precipitationProbability: Double? = null,
+    val rainVolumeMm: Double? = null,
     val nowEpochMs: Long = Clock.System.now().toEpochMilliseconds(),
     val random: Random = Random.Default,
 )

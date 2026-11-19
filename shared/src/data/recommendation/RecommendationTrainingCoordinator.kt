@@ -14,7 +14,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
 import nl.petrichor.app.data.database.defaultClothingDao
 import nl.petrichor.app.data.database.defaultOutfitDao
 import nl.petrichor.app.data.outfit.ModelState
@@ -36,35 +35,6 @@ data class TrainingSnapshot(
     val trainedAtEpochMs: Long,
     val previousState: ModelState? = null,
 )
-
-/**
- * Phase 2 batch ridge trainer retained as a reference baseline for evaluation comparisons.
- */
-internal object RidgeModelTrainer {
-    fun train(snapshot: TrainingSnapshot): ModelState? {
-        val typeById = snapshot.clothingTypes.associateBy { it.id }
-        val samples =
-            snapshot.entries.mapNotNull { entryWithPieces ->
-                val entry = entryWithPieces.entry
-                val tempC = entryTemperature(entry)
-                val score = entry.surveyFeelingScore
-                if (entryWithPieces.hasKnownPieces && tempC != null && score != null) {
-                    FeatureExtractor.extractRaw(tempC, entry.isRainy, entryWithPieces.pieces, typeById) to score.toDouble()
-                } else {
-                    null
-                }
-            }
-        if (samples.isEmpty()) return null
-        val artifact = RidgeRatingModel.fit(samples)
-        return ModelState(
-            schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
-            dataRevision = snapshot.dataRevision,
-            trainedAtEpochMs = snapshot.trainedAtEpochMs,
-            usableSampleCount = samples.size,
-            artifactJson = Json.encodeToString(artifact),
-        )
-    }
-}
 
 /**
  * Single-flight, coalesced coordinator for recommendation model retraining.

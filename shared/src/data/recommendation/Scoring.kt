@@ -49,7 +49,17 @@ internal object Scoring {
         return if (tempC == null || model == null) {
             0.0
         } else {
-            BayesianRatingModel.predict(model, tempC, input.isRainy, pieces, typeById).mean
+            BayesianRatingModel
+                .predict(
+                    model = model,
+                    tempC = tempC,
+                    isRainy = input.isRainy,
+                    pieces = pieces,
+                    typeById = typeById,
+                    windSpeedMs = input.windSpeedMs,
+                    precipitationProbability = input.precipitationProbability,
+                    rainVolumeMm = input.rainVolumeMm,
+                ).mean
         }
     }
 

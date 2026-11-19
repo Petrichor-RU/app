@@ -14,7 +14,7 @@ import org.jetbrains.kotlinx.multik.ndarray.data.set
 /**
  * Versioned serialisable model payload persisted inside [ModelState.artifactJson].
  * Stores standardisation stats, rating posterior (mean + covariance), ordinal thermal posterior
- * (mean + covariance + threshold), and replay fingerprint metadata.
+ * (mean + covariance + threshold), active per-garment IDs, and replay fingerprint metadata.
  */
 @Serializable
 data class RecommendationModelArtifact(
@@ -26,6 +26,7 @@ data class RecommendationModelArtifact(
     val thermalMean: List<Double> = emptyList(),
     val thermalCovariance: List<Double> = emptyList(),
     val thermalThreshold: Double = BayesianThermalModel.DEFAULT_THRESHOLD,
+    val activePieceIds: List<Long> = emptyList(),
     val observationCount: Int = 0,
     val lastObservationEpochDays: Long = 0L,
     val lastObservationEntryId: Long = 0L,
@@ -48,10 +49,17 @@ internal class DecodedModel(
     val scaler: FeatureScaler,
     val ratingPosterior: RatingPosterior,
     val thermalPosterior: ThermalPosterior,
+    val activePieceIds: List<Long>,
     val replay: ReplayMetadata,
 ) {
+    val activePieceIndexById: Map<Long, Int> =
+        activePieceIds.withIndex().associate { (index, pieceId) -> pieceId to index }
+
     val weights: D1Array<Double>
         get() = ratingPosterior.mean
+
+    val dimension: Int
+        get() = ratingPosterior.dimension
 
     val observationCount: Int
         get() = replay.observationCount
@@ -100,7 +108,7 @@ internal class DecodedModel(
             artifact: RecommendationModelArtifact,
         ): DecodedModel? {
             if (!isValidArtifact(artifact)) return null
-            val d = FeatureExtractor.FEATURE_COUNT
+            val d = FeatureExtractor.CORE_FEATURE_COUNT + artifact.activePieceIds.size
             val ratingMean = mk.ndarray(artifact.ratingMean.toDoubleArray())
             val ratingCov = decodeMatrix(artifact.ratingCovariance, d) ?: BayesianRatingModel.prior(d).covariance
             val thermalMean = if (artifact.thermalMean.isEmpty()) mk.zeros(d) else mk.ndarray(artifact.thermalMean.toDoubleArray())
@@ -112,6 +120,7 @@ internal class DecodedModel(
                 scaler = artifact.scaler,
                 ratingPosterior = RatingPosterior(ratingMean, ratingCov),
                 thermalPosterior = ThermalPosterior(thermalMean, thermalCov, artifact.thermalThreshold),
+                activePieceIds = artifact.activePieceIds,
                 replay =
                     ReplayMetadata(
                         observationCount = artifact.observationCount,
@@ -123,15 +132,17 @@ internal class DecodedModel(
         }
 
         private fun isValidArtifact(artifact: RecommendationModelArtifact): Boolean {
-            val d = FeatureExtractor.FEATURE_COUNT
+            val validPieces =
+                artifact.activePieceIds.size <= FeatureExtractor.MAX_ACTIVE_PIECES &&
+                    artifact.activePieceIds.distinct().size == artifact.activePieceIds.size
+            val d = FeatureExtractor.CORE_FEATURE_COUNT + artifact.activePieceIds.size
             val validVectors =
-                artifact.featureSchemaVersion == FeatureExtractor.FEATURE_SCHEMA_VERSION &&
+                validPieces &&
+                    artifact.featureSchemaVersion == FeatureExtractor.FEATURE_SCHEMA_VERSION &&
                     artifact.scaler.isValid() &&
-                    artifact.ridgeWeights.size == d &&
-                    artifact.ridgeWeights.all { it.isFinite() } &&
-                    artifact.ratingMean.size == d &&
-                    artifact.ratingMean.all { it.isFinite() } &&
-                    (artifact.thermalMean.isEmpty() || (artifact.thermalMean.size == d && artifact.thermalMean.all { it.isFinite() }))
+                    isValidVector(artifact.ridgeWeights, d) &&
+                    isValidVector(artifact.ratingMean, d) &&
+                    (artifact.thermalMean.isEmpty() || isValidVector(artifact.thermalMean, d))
             val validMatrices =
                 isValidCovariance(artifact.ratingCovariance, d) &&
                     isValidCovariance(artifact.thermalCovariance, d)
@@ -141,6 +152,11 @@ internal class DecodedModel(
                     artifact.observationCount >= 0
             return validVectors && validMatrices && validMeta
         }
+
+        private fun isValidVector(
+            vector: List<Double>,
+            dimension: Int,
+        ): Boolean = vector.size == dimension && vector.all { it.isFinite() }
 
         private fun isValidCovariance(
             flat: List<Double>,

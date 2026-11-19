@@ -56,14 +56,14 @@ class RidgeRatingModelTest {
     )
 
     @Test
-    fun `feature extractor produces ten scaled interaction features and safely handles constant inputs`() {
+    fun `feature extractor produces fourteen scaled condition and interaction features and safely handles constant inputs`() {
         val tee = piece(1, teeType.id, Material.LINEN)
         val raw = FeatureExtractor.extractRaw(18.0, isRainy = false, listOf(tee), typeById)
         val scaler = FeatureScaler.fit(listOf(raw))
         assertTrue(scaler.isValid())
 
         val features = FeatureExtractor.buildFeatures(raw, scaler)
-        assertEquals(FeatureExtractor.FEATURE_COUNT, features.size)
+        assertEquals(FeatureExtractor.CORE_FEATURE_COUNT, features.size)
         assertEquals(1.0, features[0], 1e-12)
         // Constant n=1 sequence centres continuous features at 0.0 without NaN or Inf.
         for (i in 1 until features.size) {
@@ -77,7 +77,7 @@ class RidgeRatingModelTest {
         val jeans = piece(2, jeansType.id, Material.COTTON)
         val single = listOf(FeatureExtractor.extractRaw(15.0, false, listOf(tee, jeans), typeById) to 4.0)
         val singleArtifact = RidgeRatingModel.fit(single)
-        assertEquals(FeatureExtractor.FEATURE_COUNT, singleArtifact.ridgeWeights.size)
+        assertEquals(FeatureExtractor.CORE_FEATURE_COUNT, singleArtifact.ridgeWeights.size)
         assertTrue(singleArtifact.ridgeWeights.all { it.isFinite() })
 
         val duplicate = List(6) { FeatureExtractor.extractRaw(15.0, false, listOf(tee, jeans), typeById) to 5.0 }
@@ -149,7 +149,11 @@ class RidgeRatingModelTest {
     @Test
     fun `decoded model rejects invalid json schema mismatch non-finite weights and bad scaler`() {
         val validScaler = FeatureScaler(15.0, 5.0, 0.5, 0.25, 0.4, 0.2, 0.0, 1.0, 1.0, 0.5, 0.9, 0.4)
-        val validArtifact = RecommendationModelArtifact(scaler = validScaler, ridgeWeights = List(FeatureExtractor.FEATURE_COUNT) { 0.0 })
+        val validArtifact =
+            RecommendationModelArtifact(
+                scaler = validScaler,
+                ridgeWeights = List(FeatureExtractor.CORE_FEATURE_COUNT) { 0.0 },
+            )
         val validState =
             ModelState(
                 schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,

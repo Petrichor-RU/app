@@ -22,6 +22,7 @@ data class ClothingPiece(
     val name: String?,
     val typeId: Long,
     val material: Material = Material.UNKNOWN,
+    val weatherProtection: WeatherProtection = WeatherProtection.NONE,
     val notes: String?,
     val imagePath: String,
     val thumbnailPath: String,

@@ -113,7 +113,7 @@ class BayesianComfortModelTest {
                 qOffset = 0.0,
             )
 
-        for (i in 0 until FeatureExtractor.FEATURE_COUNT) {
+        for (i in 0 until FeatureExtractor.CORE_FEATURE_COUNT) {
             assertEquals(batchArtifact.ridgeWeights[i], kalmanPosterior.mean[i], 1e-9, "Mismatch at weight index $i")
         }
         val probe = samples.first().first
@@ -243,7 +243,7 @@ class BayesianComfortModelTest {
 
         val lastEntry = entries.last()
         val lastRaw = FeatureExtractor.extractRaw(8.0 + 11 * 1.4, false, lastEntry.pieces, typeById)
-        val lastFeatures = FeatureExtractor.buildFeatures(lastRaw, state11.scaler)
+        val lastFeatures = FeatureExtractor.buildFeatures(lastRaw, state11.scaler, lastEntry.pieces, state11.activePieceIndexById)
         val lastScore = lastEntry.entry.surveyFeelingScore!!.toDouble()
         val expectedLastRating =
             BayesianRatingModel.update(
@@ -252,7 +252,7 @@ class BayesianComfortModelTest {
                 lastScore - RidgeRatingModel.priorPrediction(lastRaw),
                 deltaDays = 1.0,
             )
-        for (i in 0 until FeatureExtractor.FEATURE_COUNT) {
+        for (i in 0 until decodedInc12.dimension) {
             assertEquals(expectedLastRating.mean[i], decodedInc12.ratingPosterior.mean[i], 1e-12)
         }
     }
@@ -287,7 +287,8 @@ class BayesianComfortModelTest {
                     BayesianModelTrainer.train(TrainingSnapshot(editedHistory, types, dataRevision = 99L, trainedAtEpochMs = 99L)),
                 )!!
 
-            for (i in 0 until FeatureExtractor.FEATURE_COUNT) {
+            assertEquals(freshReplay.dimension, fromCoordinator.dimension)
+            for (i in 0 until fromCoordinator.dimension) {
                 assertEquals(freshReplay.ratingPosterior.mean[i], fromCoordinator.ratingPosterior.mean[i], 1e-11)
                 assertEquals(freshReplay.thermalPosterior.mean[i], fromCoordinator.thermalPosterior.mean[i], 1e-11)
             }

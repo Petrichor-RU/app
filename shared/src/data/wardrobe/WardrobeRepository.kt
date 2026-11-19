@@ -69,7 +69,12 @@ class WardrobeRepository(
             val previous = clothingDao.getByIdIncludingArchived(clothing.id)
             clothingDao.update(clothing)
             val warmthMetadataChanged =
-                previous != null && (previous.typeId != clothing.typeId || previous.material != clothing.material)
+                previous != null &&
+                    (
+                        previous.typeId != clothing.typeId ||
+                            previous.material != clothing.material ||
+                            previous.weatherProtection != clothing.weatherProtection
+                    )
             if (warmthMetadataChanged && outfitDao.getEntriesForPiece(clothing.id).isNotEmpty()) {
                 trainingCoordinator?.notifyDataChanged()
             }

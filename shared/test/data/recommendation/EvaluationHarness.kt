@@ -71,6 +71,12 @@ internal data class EvaluationReport(
     val rankingLatencyP95Ms: Double,
 )
 
+internal data class HoldoutEvaluationReport(
+    val policyName: String,
+    val rating: SliceMetrics,
+    val thermal: ThermalCalibrationMetrics,
+)
+
 internal enum class EvaluationPolicy {
     HEURISTIC,
     ADDITIVE_LINEAR_V1,
@@ -149,6 +155,57 @@ internal object EvaluationHarness {
             updateLatencyP95Ms = percentile(updateLatenciesMs, 0.95),
             rankingLatencyP50Ms = percentile(rankingLatenciesMs, 0.50),
             rankingLatencyP95Ms = percentile(rankingLatenciesMs, 0.95),
+        )
+    }
+
+    fun evaluateHoldout(
+        trainHistory: List<OutfitEntryWithPieces>,
+        holdoutEntries: List<OutfitEntryWithPieces>,
+        types: List<ClothingType>,
+        wardrobe: List<ClothingPiece>,
+        policy: EvaluationPolicy,
+    ): HoldoutEvaluationReport {
+        val sortedTrain =
+            trainHistory
+                .filter { it.entry.surveyFeelingScore != null && entryTemperature(it.entry) != null }
+                .sortedWith(entryOrder)
+        val typeById = types.associateBy { it.id }
+        val (modelRef, _) = fitPolicyTimed(policy, sortedTrain, types, typeById)
+        val dataset = SyntheticDataset(wardrobe, types, sortedTrain, emptyList<ClothingPiece>() to emptyList())
+        val ratingRecords = mutableListOf<ObservationError>()
+        val thermalRecords = mutableListOf<ThermalObservationError>()
+
+        val validHoldout =
+            holdoutEntries.filter { it.entry.surveyFeelingScore != null && entryTemperature(it.entry) != null }
+        for (item in validHoldout) {
+            val e = item.entry
+            val tempC = entryTemperature(e)!!
+            val targetScore = e.surveyFeelingScore!!.toDouble()
+            val pred =
+                scoreCandidateForPolicy(
+                    policy = policy,
+                    modelRef = modelRef,
+                    dataset = dataset,
+                    history = sortedTrain,
+                    pieces = item.pieces,
+                    tempC = tempC,
+                    isRainy = e.isRainy,
+                    date = e.wornOnDate,
+                    typeById = typeById,
+                    windSpeedMs = e.windSpeedMs,
+                    precipitationProbability = e.precipitationProbability,
+                    rainVolumeMm = e.rainVolumeMm,
+                )
+            check(pred.score.isFinite()) { "Non-finite prediction in $policy for holdout entry ${e.id}" }
+            ratingRecords += buildObservationError(sortedTrain, item, tempC, pred.ratingEstimate, targetScore)
+            e.surveyWarmthVerdict?.let { verdict ->
+                thermalRecords += buildThermalError(pred.thermal, verdict)
+            }
+        }
+        return HoldoutEvaluationReport(
+            policyName = policy.name,
+            rating = aggregate(ratingRecords),
+            thermal = aggregateThermal(thermalRecords),
         )
     }
 
@@ -296,9 +353,18 @@ internal object EvaluationHarness {
     ): DecodedModel? {
         val samples =
             history.mapNotNull { item ->
-                val temp = entryTemperature(item.entry) ?: return@mapNotNull null
-                val score = item.entry.surveyFeelingScore?.toDouble() ?: return@mapNotNull null
-                FeatureExtractor.extractRaw(temp, item.entry.isRainy, item.pieces, typeById) to score
+                val e = item.entry
+                val temp = entryTemperature(e) ?: return@mapNotNull null
+                val score = e.surveyFeelingScore?.toDouble() ?: return@mapNotNull null
+                FeatureExtractor.extractRaw(
+                    tempC = temp,
+                    isRainy = e.isRainy,
+                    pieces = item.pieces,
+                    typeById = typeById,
+                    windSpeedMs = e.windSpeedMs,
+                    precipitationProbability = e.precipitationProbability,
+                    rainVolumeMm = e.rainVolumeMm,
+                ) to score
             }
         if (samples.isEmpty()) return null
         val artifact = RidgeRatingModel.fit(samples)
@@ -324,6 +390,7 @@ internal object EvaluationHarness {
         typeById: Map<Long, ClothingType>,
     ): Pair<StepPrediction, Duration> {
         val mark = TimeSource.Monotonic.markNow()
+        val e = current.entry
         val predicted =
             scoreCandidateForPolicy(
                 policy = policy,
@@ -332,8 +399,11 @@ internal object EvaluationHarness {
                 history = history,
                 pieces = current.pieces,
                 tempC = tempC,
-                isRainy = current.entry.isRainy,
-                date = current.entry.wornOnDate,
+                isRainy = e.isRainy,
+                windSpeedMs = e.windSpeedMs,
+                precipitationProbability = e.precipitationProbability,
+                rainVolumeMm = e.rainVolumeMm,
+                date = e.wornOnDate,
                 typeById = typeById,
             )
         return predicted to mark.elapsedNow()
@@ -350,51 +420,156 @@ internal object EvaluationHarness {
         isRainy: Boolean,
         date: LocalDate,
         typeById: Map<Long, ClothingType>,
+        windSpeedMs: Double? = null,
+        precipitationProbability: Double? = null,
+        rainVolumeMm: Double? = null,
     ): StepPrediction {
-        val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
-        val heuristicProbs = heuristicThermalBaseline(dataset, history, pieces, tempC, isRainy, date, typeById)
+        val raw =
+            FeatureExtractor.extractRaw(
+                tempC = tempC,
+                isRainy = isRainy,
+                pieces = pieces,
+                typeById = typeById,
+                windSpeedMs = windSpeedMs,
+                precipitationProbability = precipitationProbability,
+                rainVolumeMm = rainVolumeMm,
+            )
         return when (policy) {
-            EvaluationPolicy.HEURISTIC -> {
-                val input = heuristicInput(dataset, history, tempC, isRainy, date)
-                val candidate = OutfitCandidate(null, pieces, null, null, RecommendationSource.HEURISTIC)
-                val s = Scoring.heuristicScore(input, candidate, typeById)
-                StepPrediction(score = s, ratingEstimate = s, thermal = heuristicProbs)
-            }
-
-            EvaluationPolicy.ADDITIVE_LINEAR_V1 -> {
-                val coeffs = modelRef as? DoubleArray
-                val s =
-                    if (coeffs == null) {
-                        RidgeRatingModel.priorPrediction(raw)
-                    } else {
-                        LegacyAdditiveModel.predict(coeffs, tempC, isRainy, pieces, typeById)
-                    }
-                StepPrediction(score = s, ratingEstimate = s, thermal = heuristicProbs)
+            EvaluationPolicy.HEURISTIC,
+            EvaluationPolicy.ADDITIVE_LINEAR_V1,
+            -> {
+                heuristicAndAdditiveStepPrediction(policy, modelRef, dataset, history, raw, pieces, tempC, isRainy, date, typeById)
             }
 
             EvaluationPolicy.INTERACTION_RIDGE_V2 -> {
-                val model = modelRef as? DecodedModel
-                val s =
-                    if (model == null) {
-                        RidgeRatingModel.priorPrediction(raw)
-                    } else {
-                        RidgeRatingModel.predict(model, tempC, isRainy, pieces, typeById)
-                    }
-                StepPrediction(score = s, ratingEstimate = s, thermal = heuristicProbs)
+                interactionRidgeStepPrediction(
+                    model = modelRef as? DecodedModel,
+                    dataset = dataset,
+                    history = history,
+                    raw = raw,
+                    pieces = pieces,
+                    tempC = tempC,
+                    isRainy = isRainy,
+                    date = date,
+                    typeById = typeById,
+                    windSpeedMs = windSpeedMs,
+                    precipitationProbability = precipitationProbability,
+                    rainVolumeMm = rainVolumeMm,
+                )
             }
 
             EvaluationPolicy.BAYESIAN_RATING_V3,
             EvaluationPolicy.BAYESIAN_COMBINED_V3,
             -> {
-                val model = modelRef as? DecodedModel
-                val comfort =
-                    model?.let { BayesianComfortModel.predict(it, tempC, isRainy, pieces, typeById) }
-                        ?: priorComfortPrediction(raw)
-                val rankingScore =
-                    if (policy == EvaluationPolicy.BAYESIAN_COMBINED_V3) comfort.combinedScore else comfort.rating.mean
-                StepPrediction(score = rankingScore, ratingEstimate = comfort.rating.mean, thermal = comfort.thermal)
+                bayesianStepPrediction(
+                    policy = policy,
+                    model = modelRef as? DecodedModel,
+                    raw = raw,
+                    pieces = pieces,
+                    tempC = tempC,
+                    isRainy = isRainy,
+                    typeById = typeById,
+                    windSpeedMs = windSpeedMs,
+                    precipitationProbability = precipitationProbability,
+                    rainVolumeMm = rainVolumeMm,
+                )
             }
         }
+    }
+
+    @Suppress("LongParameterList") // dispatches legacy and heuristic policies
+    private fun heuristicAndAdditiveStepPrediction(
+        policy: EvaluationPolicy,
+        modelRef: Any?,
+        dataset: SyntheticDataset,
+        history: List<OutfitEntryWithPieces>,
+        raw: RawOutfitSignals,
+        pieces: List<ClothingPiece>,
+        tempC: Double,
+        isRainy: Boolean,
+        date: LocalDate,
+        typeById: Map<Long, ClothingType>,
+    ): StepPrediction {
+        val score =
+            if (policy == EvaluationPolicy.HEURISTIC) {
+                val input = heuristicInput(dataset, history, tempC, isRainy, date)
+                val candidate = OutfitCandidate(null, pieces, null, null, RecommendationSource.HEURISTIC)
+                Scoring.heuristicScore(input, candidate, typeById)
+            } else {
+                val coeffs = modelRef as? DoubleArray
+                if (coeffs == null) {
+                    RidgeRatingModel.priorPrediction(raw)
+                } else {
+                    LegacyAdditiveModel.predict(coeffs, tempC, isRainy, pieces, typeById)
+                }
+            }
+        val probs = heuristicThermalBaseline(dataset, history, pieces, tempC, isRainy, date, typeById)
+        return StepPrediction(score = score, ratingEstimate = score, thermal = probs)
+    }
+
+    @Suppress("LongParameterList") // forwards weather context to RidgeRatingModel
+    private fun interactionRidgeStepPrediction(
+        model: DecodedModel?,
+        dataset: SyntheticDataset,
+        history: List<OutfitEntryWithPieces>,
+        raw: RawOutfitSignals,
+        pieces: List<ClothingPiece>,
+        tempC: Double,
+        isRainy: Boolean,
+        date: LocalDate,
+        typeById: Map<Long, ClothingType>,
+        windSpeedMs: Double?,
+        precipitationProbability: Double?,
+        rainVolumeMm: Double?,
+    ): StepPrediction {
+        val score =
+            if (model == null) {
+                RidgeRatingModel.priorPrediction(raw)
+            } else {
+                RidgeRatingModel.predict(
+                    model = model,
+                    tempC = tempC,
+                    isRainy = isRainy,
+                    pieces = pieces,
+                    typeById = typeById,
+                    windSpeedMs = windSpeedMs,
+                    precipitationProbability = precipitationProbability,
+                    rainVolumeMm = rainVolumeMm,
+                )
+            }
+        val probs = heuristicThermalBaseline(dataset, history, pieces, tempC, isRainy, date, typeById)
+        return StepPrediction(score = score, ratingEstimate = score, thermal = probs)
+    }
+
+    @Suppress("LongParameterList") // forwards weather context to BayesianComfortModel
+    private fun bayesianStepPrediction(
+        policy: EvaluationPolicy,
+        model: DecodedModel?,
+        raw: RawOutfitSignals,
+        pieces: List<ClothingPiece>,
+        tempC: Double,
+        isRainy: Boolean,
+        typeById: Map<Long, ClothingType>,
+        windSpeedMs: Double?,
+        precipitationProbability: Double?,
+        rainVolumeMm: Double?,
+    ): StepPrediction {
+        val comfort =
+            model?.let {
+                BayesianComfortModel.predict(
+                    model = it,
+                    tempC = tempC,
+                    isRainy = isRainy,
+                    pieces = pieces,
+                    typeById = typeById,
+                    windSpeedMs = windSpeedMs,
+                    precipitationProbability = precipitationProbability,
+                    rainVolumeMm = rainVolumeMm,
+                )
+            } ?: priorComfortPrediction(raw)
+        val rankingScore =
+            if (policy == EvaluationPolicy.BAYESIAN_COMBINED_V3) comfort.combinedScore else comfort.rating.mean
+        return StepPrediction(score = rankingScore, ratingEstimate = comfort.rating.mean, thermal = comfort.thermal)
     }
 
     private fun priorComfortPrediction(raw: RawOutfitSignals): ComfortPrediction {
@@ -413,7 +588,7 @@ internal object EvaluationHarness {
                 totalWarmthMean = raw.totalWarmth,
                 totalWarmthStd = 1.0,
             )
-        val features = FeatureExtractor.buildFeatures(raw, scaler)
+        val features = FeatureExtractor.buildCoreFeatures(raw, scaler)
         return BayesianComfortModel.predict(
             ratingPosterior = BayesianRatingModel.prior(),
             thermalPosterior = BayesianThermalModel.prior(),
