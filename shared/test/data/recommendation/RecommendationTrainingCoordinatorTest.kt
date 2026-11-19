@@ -88,7 +88,7 @@ class RecommendationTrainingCoordinatorTest {
                     appScope = this,
                     trainer = { snapshot ->
                         trainedRevisions += snapshot.dataRevision
-                        LegacyLinearModelTrainer.train(snapshot)
+                        RidgeModelTrainer.train(snapshot)
                     },
                 )
 
@@ -101,7 +101,7 @@ class RecommendationTrainingCoordinatorTest {
             val state = outfitDao.getModelState()
             assertNotNull(state)
             assertEquals(5L, state.dataRevision)
-            assertEquals(ModelState.LEGACY_FEATURE_SCHEMA_VERSION, state.schemaVersion)
+            assertEquals(FeatureExtractor.FEATURE_SCHEMA_VERSION, state.schemaVersion)
         }
 
     @Test
@@ -127,7 +127,7 @@ class RecommendationTrainingCoordinatorTest {
                             // Mutate during training so revision advances while run 1 is in flight.
                             coordinator.notifyDataChanged()
                         }
-                        LegacyLinearModelTrainer.train(snapshot)
+                        RidgeModelTrainer.train(snapshot)
                     },
                 )
 

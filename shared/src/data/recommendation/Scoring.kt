@@ -36,7 +36,7 @@ internal object Scoring {
         return baseScore - temperaturePenalty(candidate, input.tempC)
     }
 
-    /** MODEL: predicted feeling score clamped to 1..5 using pre-decoded model coefficients. */
+    /** MODEL: predicted feeling score clamped to 1..5 using the decoded interaction ridge artefact. */
     fun modelScore(
         input: RecommendationInput,
         pieces: List<ClothingPiece>,
@@ -48,12 +48,7 @@ internal object Scoring {
         return if (tempC == null || model == null) {
             0.0
         } else {
-            val features = WarmthEncoding.featureVector(tempC, input.isRainy, pieces, typeById)
-            if (features.size == model.coefficients.size) {
-                LinearRegression.predict(model.coefficients, features).coerceIn(1.0, 5.0)
-            } else {
-                0.0
-            }
+            RidgeRatingModel.predict(model, tempC, input.isRainy, pieces, typeById)
         }
     }
 

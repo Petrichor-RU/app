@@ -88,13 +88,13 @@ data class OutfitEntryWithPieces(
 @Entity(tableName = "model_state")
 data class ModelState(
     @PrimaryKey val id: Long = 1, // singleton row
-    val coefficientsJson: String, // kotlinx-serialization List<Double>
+    val schemaVersion: Int,
+    val dataRevision: Long,
     val trainedAtEpochMs: Long,
-    val sampleCount: Int,
-    val schemaVersion: Int = LEGACY_FEATURE_SCHEMA_VERSION,
-    val dataRevision: Long = 0L,
+    val usableSampleCount: Int,
+    val artifactJson: String, // kotlinx.serialization RecommendationModelArtifact
 ) {
     companion object {
-        const val LEGACY_FEATURE_SCHEMA_VERSION = 1
+        const val CURRENT_SCHEMA_VERSION = 2
     }
 }

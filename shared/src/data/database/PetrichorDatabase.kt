@@ -16,7 +16,7 @@ import nl.petrichor.app.data.wardrobe.ClothingType
 /**
  * Room database for the whole app (wardrobe and outfit journal).
  * Uses Room's multiplatform support with SQLite bundled.
- * Version 3 adds richer weather context columns on outfit_entries and schema/revision tracking on model_state.
+ * Version 4 upgrades model_state to store versioned RecommendationModelArtifact JSON payloads.
  * The platform builders use fallbackToDestructiveMigration(true), which the owner approved.
  */
 @Database(
@@ -27,7 +27,7 @@ import nl.petrichor.app.data.wardrobe.ClothingType
         OutfitEntryPiece::class,
         ModelState::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 @ConstructedBy(PetrichorDatabaseConstructor::class)

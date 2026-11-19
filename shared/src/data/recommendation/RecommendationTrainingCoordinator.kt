@@ -37,9 +37,10 @@ data class TrainingSnapshot(
 )
 
 /**
- * Default Phase 1 trainer using [WarmthEncoding] + [LinearRegression].
+ * Phase 2 trainer using [FeatureExtractor] + [RidgeRatingModel] and persisting a versioned
+ * [RecommendationModelArtifact].
  */
-internal object LegacyLinearModelTrainer {
+internal object RidgeModelTrainer {
     fun train(snapshot: TrainingSnapshot): ModelState? {
         val typeById = snapshot.clothingTypes.associateBy { it.id }
         val samples =
@@ -48,19 +49,19 @@ internal object LegacyLinearModelTrainer {
                 val tempC = entryTemperature(entry)
                 val score = entry.surveyFeelingScore
                 if (entryWithPieces.hasKnownPieces && tempC != null && score != null) {
-                    WarmthEncoding.featureVector(tempC, entry.isRainy, entryWithPieces.pieces, typeById) to score.toDouble()
+                    FeatureExtractor.extractRaw(tempC, entry.isRainy, entryWithPieces.pieces, typeById) to score.toDouble()
                 } else {
                     null
                 }
             }
         if (samples.isEmpty()) return null
-        val coefficients = LinearRegression.fit(samples)
+        val artifact = RidgeRatingModel.fit(samples)
         return ModelState(
-            coefficientsJson = Json.encodeToString(coefficients.toList()),
-            trainedAtEpochMs = snapshot.trainedAtEpochMs,
-            sampleCount = samples.size,
-            schemaVersion = ModelState.LEGACY_FEATURE_SCHEMA_VERSION,
+            schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
             dataRevision = snapshot.dataRevision,
+            trainedAtEpochMs = snapshot.trainedAtEpochMs,
+            usableSampleCount = samples.size,
+            artifactJson = Json.encodeToString(artifact),
         )
     }
 }
@@ -76,8 +77,8 @@ class RecommendationTrainingCoordinator(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val appScope: CoroutineScope = recommendationAppScope,
     private val clock: Clock = Clock.System,
-    private val activeSchemaVersion: Int = ModelState.LEGACY_FEATURE_SCHEMA_VERSION,
-    private val trainer: suspend (TrainingSnapshot) -> ModelState? = LegacyLinearModelTrainer::train,
+    private val activeSchemaVersion: Int = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+    private val trainer: suspend (TrainingSnapshot) -> ModelState? = RidgeModelTrainer::train,
 ) {
     private val triggerChannel = Channel<Unit>(Channel.CONFLATED)
     private val trainingMutex = Mutex()
@@ -107,7 +108,7 @@ class RecommendationTrainingCoordinator(
                     usableCount == 0 -> state != null
                     state == null -> true
                     state.schemaVersion != activeSchemaVersion -> true
-                    state.sampleCount != usableCount -> true
+                    state.usableSampleCount != usableCount -> true
                     newestSurvey != null && state.trainedAtEpochMs < newestSurvey -> true
                     else -> false
                 }

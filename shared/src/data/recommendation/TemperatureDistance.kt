@@ -16,12 +16,16 @@ private const val PENALTY_PER_DEGREE_C = 0.25
 val OutfitEntryWithPieces.hasKnownPieces: Boolean
     get() = pieces.isNotEmpty()
 
+private const val PRIOR_RAINY_BONUS = 0.3
+
 /**
  * Built-in prior for the ideal warmth when the target temperature is far outside the surveyed
- * range: warmer days call for less warmth. Used instead of flat extrapolation, which would keep
- * a single PERFECT verdict's warmth ideal at every temperature.
+ * range: warmer days call for less warmth, and rainy weather adds a modest shell bonus.
  */
-fun priorIdealWarmth(tempC: Double): Double = (3.6 - 0.12 * tempC).coerceIn(1.0, 5.0)
+fun priorIdealWarmth(
+    tempC: Double,
+    isRainy: Boolean = false,
+): Double = (3.6 - 0.12 * tempC + if (isRainy) PRIOR_RAINY_BONUS else 0.0).coerceIn(1.0, 5.0)
 
 /** Training points (temperature, warmth, verdict) from surveyed entries with known garments and weather data. */
 internal fun trainingPoints(

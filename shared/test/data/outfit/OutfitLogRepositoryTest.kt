@@ -84,7 +84,7 @@ class OutfitLogRepositoryTest {
             // retrain ran in the background scope and persisted a model state row
             val model = dao.modelStates.lastOrNull()
             assertNotNull(model)
-            assertEquals(1, model.sampleCount)
+            assertEquals(1, model.usableSampleCount)
         }
 
     @Test
@@ -126,7 +126,7 @@ class OutfitLogRepositoryTest {
 
             val model = dao.modelStates.lastOrNull()
             assertNotNull(model)
-            assertEquals(1, model.sampleCount)
+            assertEquals(1, model.usableSampleCount)
         }
 
     @Test

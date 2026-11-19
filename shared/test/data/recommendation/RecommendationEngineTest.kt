@@ -2,6 +2,7 @@ package nl.petrichor.app.data.recommendation
 
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
+import kotlinx.serialization.json.Json
 import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
@@ -427,10 +428,24 @@ class RecommendationEngineTest {
         assertEquals(listOf(CoverageZone.FULL_BODY), withDress.map { it.zone })
     }
 
+    private fun testArtifactState(
+        weights: List<Double> = listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+        schemaVersion: Int = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+    ): ModelState {
+        val scaler = FeatureScaler(15.0, 5.0, 0.5, 0.25, 0.4, 0.2, 0.0, 1.0, 1.0, 0.5, 0.9, 0.4)
+        val artifact = RecommendationModelArtifact(featureSchemaVersion = schemaVersion, scaler = scaler, ridgeWeights = weights)
+        return ModelState(
+            schemaVersion = schemaVersion,
+            dataRevision = 1L,
+            trainedAtEpochMs = now,
+            usableSampleCount = 12,
+            artifactJson = Json.encodeToString(artifact),
+        )
+    }
+
     @Test
-    fun `model mode predicts with the stored coefficients`() {
-        // y = 4 + 0.0*x... -> coefficients [4, 0, ...]; candidate predicted 4 clamped 1..5
-        val modelState = ModelState(coefficientsJson = "[4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", trainedAtEpochMs = now, sampleCount = 12)
+    fun `model mode predicts with the stored artifact`() {
+        val modelState = testArtifactState()
         val tee = piece(1, teeType.id)
         val jeans = piece(2, jeansType.id)
         val logged = withPieces(entry(1), listOf(tee, jeans))
@@ -453,7 +468,7 @@ class RecommendationEngineTest {
         val heuristicResult = RecommendationEngine.recommendOutfits(testInput)
         assertTrue(heuristicResult.any { it.loggedEntry?.entry?.id == 1L && it.selfiePath == "selfie.jpg" })
 
-        val modelState = ModelState(coefficientsJson = "[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", trainedAtEpochMs = now, sampleCount = 12)
+        val modelState = testArtifactState(weights = listOf(-2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
         val modelResult =
             RecommendationEngine.recommendOutfits(
                 input(pieces = listOf(tee, jeans), entries = listOf(selfieOnly), surveyedCount = 12, modelState = modelState, tempC = 15.0),
@@ -469,13 +484,7 @@ class RecommendationEngineTest {
 
     @Test
     fun `mismatched schemaVersion in ModelState falls back safely to heuristic mode`() {
-        val staleModel =
-            ModelState(
-                coefficientsJson = "[4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
-                trainedAtEpochMs = now,
-                sampleCount = 12,
-                schemaVersion = ModelState.LEGACY_FEATURE_SCHEMA_VERSION + 1,
-            )
+        val staleModel = testArtifactState(schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION + 1)
         val tee = piece(1, teeType.id)
         val jeans = piece(2, jeansType.id)
         val logged = withPieces(entry(1, WarmthVerdict.PERFECT, tempC = 15.0, score = 5), listOf(tee, jeans))

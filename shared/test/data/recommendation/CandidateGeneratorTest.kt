@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.recommendation
 
 import kotlinx.datetime.LocalDate
+import kotlinx.serialization.json.Json
 import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
@@ -179,20 +180,25 @@ class CandidateGeneratorTest {
 
     @Test
     fun `score-driven laundry replacement picks the replacement maximising predicted score`() {
-        // Model: 5.0 - 1.0 * warmthUpper (so lighter warmthUpper scores higher).
-        // Dirty tee has medium warmth; wool tee has higher warmth (closer to cotton tee),
-        // linen tee has lower warmth (further from cotton tee, higher predicted model score!).
+        // Model penalises warmthUpper_std so linen tee (warmth 0.06) beats wool tee (warmth 0.30).
         val dirtyCottonTee = piece(1, teeType.id, Material.COTTON, laundryUntil = now + 10_000)
         val woolTee = piece(2, teeType.id, Material.WOOL)
         val linenTee = piece(3, teeType.id, Material.LINEN)
         val jeans = piece(4, jeansType.id, Material.COTTON)
         val logged = OutfitEntryWithPieces(entry(1, tempC = 15.0, score = 5), listOf(dirtyCottonTee, jeans))
+        val scaler = FeatureScaler(15.0, 5.0, 0.2, 0.1, 0.36, 0.2, 0.0, 1.0, 1.0, 0.5, 0.56, 0.2)
+        val artifact =
+            RecommendationModelArtifact(
+                scaler = scaler,
+                ridgeWeights = listOf(-2.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+            )
         val modelState =
             ModelState(
-                coefficientsJson = "[5.0, 0.0, -2.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
+                schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+                dataRevision = 1L,
                 trainedAtEpochMs = now,
-                sampleCount = 12,
-                schemaVersion = ModelState.LEGACY_FEATURE_SCHEMA_VERSION,
+                usableSampleCount = 12,
+                artifactJson = Json.encodeToString(artifact),
             )
 
         val ranked =
