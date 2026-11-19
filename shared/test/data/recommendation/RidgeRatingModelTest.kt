@@ -147,7 +147,7 @@ class RidgeRatingModelTest {
     }
 
     @Test
-    fun `decoded model rejects invalid json, schema mismatch, non-finite weights, and bad scaler`() {
+    fun `decoded model rejects invalid json schema mismatch non-finite weights and bad scaler`() {
         val validScaler = FeatureScaler(15.0, 5.0, 0.5, 0.25, 0.4, 0.2, 0.0, 1.0, 1.0, 0.5, 0.9, 0.4)
         val validArtifact = RecommendationModelArtifact(scaler = validScaler, ridgeWeights = List(FeatureExtractor.FEATURE_COUNT) { 0.0 })
         val validState =
