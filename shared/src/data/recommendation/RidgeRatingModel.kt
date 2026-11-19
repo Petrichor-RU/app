@@ -30,7 +30,21 @@ internal object RidgeRatingModel {
         samples: List<Pair<RawOutfitSignals, Double>>,
         priorPrecision: Double = DEFAULT_PRIOR_PRECISION,
     ): RecommendationModelArtifact {
+        val precisionDiagonal =
+            DoubleArray(FeatureExtractor.FEATURE_COUNT) { idx ->
+                if (idx == 0) 0.0 else priorPrecision
+            }
+        return fitWithDiagonalPrecision(samples, precisionDiagonal)
+    }
+
+    internal fun fitWithDiagonalPrecision(
+        samples: List<Pair<RawOutfitSignals, Double>>,
+        precisionDiagonal: DoubleArray,
+    ): RecommendationModelArtifact {
         require(samples.isNotEmpty()) { "Cannot fit a ridge model without samples" }
+        require(precisionDiagonal.size == FeatureExtractor.FEATURE_COUNT) {
+            "Expected ${FeatureExtractor.FEATURE_COUNT} precision entries"
+        }
         val rawSignals = samples.map { it.first }
         val scaler = FeatureScaler.fit(rawSignals)
         val n = samples.size
@@ -49,8 +63,8 @@ internal object RidgeRatingModel {
         val rVector = mk.ndarray(residuals)
         val xt = xMatrix.transpose()
         val normalMatrix = StatsFacade.matMul(xt, xMatrix)
-        for (i in 1 until d) {
-            normalMatrix[i, i] = normalMatrix[i, i] + priorPrecision
+        for (i in 0 until d) {
+            normalMatrix[i, i] = normalMatrix[i, i] + precisionDiagonal[i]
         }
         val rhs = StatsFacade.matVec(xt, rVector)
         val beta = StatsFacade.solveLinearSystem(normalMatrix, rhs)

@@ -194,7 +194,7 @@ class CandidateGeneratorTest {
             )
         val modelState =
             ModelState(
-                schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
                 dataRevision = 1L,
                 trainedAtEpochMs = now,
                 usableSampleCount = 12,

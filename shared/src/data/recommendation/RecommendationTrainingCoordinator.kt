@@ -34,11 +34,11 @@ data class TrainingSnapshot(
     val clothingTypes: List<ClothingType>,
     val dataRevision: Long,
     val trainedAtEpochMs: Long,
+    val previousState: ModelState? = null,
 )
 
 /**
- * Phase 2 trainer using [FeatureExtractor] + [RidgeRatingModel] and persisting a versioned
- * [RecommendationModelArtifact].
+ * Phase 2 batch ridge trainer retained as a reference baseline for evaluation comparisons.
  */
 internal object RidgeModelTrainer {
     fun train(snapshot: TrainingSnapshot): ModelState? {
@@ -57,7 +57,7 @@ internal object RidgeModelTrainer {
         if (samples.isEmpty()) return null
         val artifact = RidgeRatingModel.fit(samples)
         return ModelState(
-            schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+            schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
             dataRevision = snapshot.dataRevision,
             trainedAtEpochMs = snapshot.trainedAtEpochMs,
             usableSampleCount = samples.size,
@@ -77,8 +77,8 @@ class RecommendationTrainingCoordinator(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val appScope: CoroutineScope = recommendationAppScope,
     private val clock: Clock = Clock.System,
-    private val activeSchemaVersion: Int = FeatureExtractor.FEATURE_SCHEMA_VERSION,
-    private val trainer: suspend (TrainingSnapshot) -> ModelState? = RidgeModelTrainer::train,
+    private val activeSchemaVersion: Int = ModelState.CURRENT_SCHEMA_VERSION,
+    private val trainer: suspend (TrainingSnapshot) -> ModelState? = BayesianModelTrainer::train,
 ) {
     private val triggerChannel = Channel<Unit>(Channel.CONFLATED)
     private val trainingMutex = Mutex()
@@ -135,6 +135,7 @@ class RecommendationTrainingCoordinator(
                     clothingTypes = clothingDao.getTypes().first(),
                     dataRevision = capturedRevision,
                     trainedAtEpochMs = clock.now().toEpochMilliseconds(),
+                    previousState = outfitDao.getModelState(),
                 )
             }
         val nextState = withContext(ioDispatcher) { trainer(snapshot) }

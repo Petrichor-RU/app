@@ -95,6 +95,6 @@ data class ModelState(
     val artifactJson: String, // kotlinx.serialization RecommendationModelArtifact
 ) {
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 2
+        const val CURRENT_SCHEMA_VERSION = 3
     }
 }

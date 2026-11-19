@@ -430,10 +430,10 @@ class RecommendationEngineTest {
 
     private fun testArtifactState(
         weights: List<Double> = listOf(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
-        schemaVersion: Int = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+        schemaVersion: Int = ModelState.CURRENT_SCHEMA_VERSION,
     ): ModelState {
         val scaler = FeatureScaler(15.0, 5.0, 0.5, 0.25, 0.4, 0.2, 0.0, 1.0, 1.0, 0.5, 0.9, 0.4)
-        val artifact = RecommendationModelArtifact(featureSchemaVersion = schemaVersion, scaler = scaler, ridgeWeights = weights)
+        val artifact = RecommendationModelArtifact(scaler = scaler, ridgeWeights = weights)
         return ModelState(
             schemaVersion = schemaVersion,
             dataRevision = 1L,
@@ -484,7 +484,7 @@ class RecommendationEngineTest {
 
     @Test
     fun `mismatched schemaVersion in ModelState falls back safely to heuristic mode`() {
-        val staleModel = testArtifactState(schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION + 1)
+        val staleModel = testArtifactState(schemaVersion = ModelState.CURRENT_SCHEMA_VERSION + 1)
         val tee = piece(1, teeType.id)
         val jeans = piece(2, jeansType.id)
         val logged = withPieces(entry(1, WarmthVerdict.PERFECT, tempC = 15.0, score = 5), listOf(tee, jeans))

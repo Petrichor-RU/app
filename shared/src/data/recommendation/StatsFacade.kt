@@ -3,6 +3,7 @@ package nl.petrichor.app.data.recommendation
 import org.jetbrains.kotlinx.multik.api.linalg.dot
 import org.jetbrains.kotlinx.multik.api.linalg.solve
 import org.jetbrains.kotlinx.multik.api.mk
+import org.jetbrains.kotlinx.multik.api.zeros
 import org.jetbrains.kotlinx.multik.ndarray.data.D1Array
 import org.jetbrains.kotlinx.multik.ndarray.data.D2Array
 import org.jetbrains.kotlinx.multik.ndarray.data.get
@@ -64,6 +65,26 @@ internal object StatsFacade {
     ): D1Array<Double> = mk.linalg.dot(matrix, vector)
 
     /**
+     * Inverse Mills ratio `m(z) = phi(z) / (1 - Phi(z))` paired with `(m(z) - z)` so that
+     * truncated-Gaussian variance computations avoid `0 / 0` and catastrophic cancellation in
+     * extreme upper tails (`z > 6`).
+     */
+    fun upperTailMillsRatio(z: Double): Pair<Double, Double> {
+        if (z <= TAIL_GUARD_Z) {
+            val tail = standardNormalCdf(-z)
+            val m = if (tail > 0.0) standardNormalPdf(z) / tail else 0.0
+            return m to (m - z)
+        }
+        // M(z) = z + 1 / (z + 2 / (z + 3 / ...)), so M(z) - z = 1 / denom after folding k = 10 downTo 2.
+        var denom = z
+        for (k in MILLS_CF_DEPTH downTo 2) {
+            denom = z + k.toDouble() / denom
+        }
+        val mMinusZ = 1.0 / denom
+        return (z + mMinusZ) to mMinusZ
+    }
+
+    /**
      * Solves `A * x = b` via Multik PLU factorisation, adding tiny diagonal jitter only if
      * the direct solve fails or produces non-finite entries.
      */
@@ -87,5 +108,44 @@ internal object StatsFacade {
             if (!vector[i].isFinite()) return false
         }
         return true
+    }
+
+    private const val TAIL_GUARD_Z = 6.0
+    private const val MILLS_CF_DEPTH = 10
+}
+
+/** Focused Multik matrix helpers used by Bayesian posterior updates. */
+internal object MultikOps {
+    fun quadForm(
+        vector: D1Array<Double>,
+        matrix: D2Array<Double>,
+    ): Double = StatsFacade.dot(vector, StatsFacade.matVec(matrix, vector))
+
+    fun diagonalMatrix(diagonal: DoubleArray): D2Array<Double> {
+        val size = diagonal.size
+        val result = mk.zeros<Double>(size, size)
+        for (i in 0 until size) {
+            result[i, i] = diagonal[i]
+        }
+        return result
+    }
+
+    fun symmetriseAndFloor(
+        matrix: D2Array<Double>,
+        minDiagonal: Double = 1e-9,
+    ): D2Array<Double> {
+        val size = matrix.shape[0]
+        val result = mk.zeros<Double>(size, size)
+        for (i in 0 until size) {
+            val diag = matrix[i, i]
+            result[i, i] = if (diag.isFinite() && diag >= minDiagonal) diag else minDiagonal
+            for (j in (i + 1) until size) {
+                val avg = 0.5 * (matrix[i, j] + matrix[j, i])
+                val safe = if (avg.isFinite()) avg else 0.0
+                result[i, j] = safe
+                result[j, i] = safe
+            }
+        }
+        return result
     }
 }

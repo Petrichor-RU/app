@@ -26,17 +26,18 @@ internal object Scoring {
         mode: RecommendationMode,
         decodedModel: DecodedModel?,
     ): Double {
+        val hasUsableModel = decodedModel != null && input.tempC != null && input.surveyedCount >= 1
         val baseScore =
             when {
                 mode == RecommendationMode.FALLBACK -> fallbackRank(candidate)
                 candidate.pieces.isEmpty() && candidate.loggedEntry != null -> selfieHistoryScore(candidate)
-                mode == RecommendationMode.MODEL -> modelScore(input, candidate.pieces, typeById, decodedModel)
+                hasUsableModel -> modelScore(input, candidate.pieces, typeById, decodedModel)
                 else -> heuristicScore(input, candidate, typeById)
             }
         return baseScore - temperaturePenalty(candidate, input.tempC)
     }
 
-    /** MODEL: predicted feeling score clamped to 1..5 using the decoded interaction ridge artefact. */
+    /** MODEL: predicted 1–5 feeling score using the decoded Bayesian rating posterior. */
     fun modelScore(
         input: RecommendationInput,
         pieces: List<ClothingPiece>,
@@ -48,7 +49,7 @@ internal object Scoring {
         return if (tempC == null || model == null) {
             0.0
         } else {
-            RidgeRatingModel.predict(model, tempC, input.isRainy, pieces, typeById)
+            BayesianRatingModel.predict(model, tempC, input.isRainy, pieces, typeById).mean
         }
     }
 

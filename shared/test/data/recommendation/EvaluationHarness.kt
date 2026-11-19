@@ -37,6 +37,23 @@ internal data class SliceMetrics(
     val rmse: Double,
 )
 
+internal data class ThermalCalibrationMetrics(
+    val count: Int,
+    val ordinalLogLoss: Double,
+    val brierScore: Double,
+    val expectedCalibrationError: Double,
+    val misclassificationRate: Double,
+    val extremePolarityErrorRate: Double,
+)
+
+internal data class DimensionLatencyReport(
+    val dimension: Int,
+    val updateP50Ms: Double,
+    val updateP95Ms: Double,
+    val rankingP50Ms: Double,
+    val rankingP95Ms: Double,
+)
+
 internal data class EvaluationReport(
     val policyName: String,
     val overall: SliceMetrics,
@@ -46,11 +63,496 @@ internal data class EvaluationReport(
     val unseenOutfits: SliceMetrics,
     val inRangeTemps: SliceMetrics,
     val outOfRangeTemps: SliceMetrics,
+    val thermal: ThermalCalibrationMetrics,
     val weatherReversalAccuracy: Double,
     val updateLatencyP50Ms: Double,
     val updateLatencyP95Ms: Double,
     val rankingLatencyP50Ms: Double,
     val rankingLatencyP95Ms: Double,
+)
+
+internal enum class EvaluationPolicy {
+    HEURISTIC,
+    ADDITIVE_LINEAR_V1,
+    INTERACTION_RIDGE_V2,
+    BAYESIAN_RATING_V3,
+    BAYESIAN_COMBINED_V3,
+}
+
+/**
+ * Pure common chronological (prequential) evaluation harness: sorts logged entries by wear/survey
+ * timestamp and scores observation `t` strictly from entries `[0 until t]`.
+ */
+@Suppress("TooManyFunctions") // cohesive prequential evaluation + calibration + latency suite
+internal object EvaluationHarness {
+    private const val LATENCY_CANDIDATE_COUNT = 120
+    private const val BENCHMARK_UPDATES = 40
+    private const val BENCHMARK_RANK_RUNS = 20
+    private const val ECE_BINS = 5
+    private const val MIN_PROB_CLAMP = 1e-12
+
+    private val entryOrder =
+        compareBy<OutfitEntryWithPieces>(
+            { it.entry.wornOnDate },
+            { it.entry.surveyedAtEpochMs ?: Long.MAX_VALUE },
+            { it.entry.createdAtEpochMs },
+            { it.entry.id },
+        )
+
+    fun evaluate(
+        dataset: SyntheticDataset,
+        policy: EvaluationPolicy,
+    ): EvaluationReport {
+        val sorted =
+            dataset.entries
+                .filter { it.entry.surveyFeelingScore != null && entryTemperature(it.entry) != null }
+                .sortedWith(entryOrder)
+        val typeById = dataset.types.associateBy { it.id }
+        val records = mutableListOf<ObservationError>()
+        val thermalRecords = mutableListOf<ThermalObservationError>()
+        val updateLatenciesMs = mutableListOf<Double>()
+        val rankingLatenciesMs = mutableListOf<Double>()
+
+        for (t in sorted.indices) {
+            val current = sorted[t]
+            val targetScore = current.entry.surveyFeelingScore!!.toDouble()
+            val tempC = entryTemperature(current.entry)!!
+            val history = sorted.subList(0, t)
+
+            val (modelRef, updateDuration) = fitPolicyTimed(policy, history, dataset.types, typeById)
+            if (history.isNotEmpty()) updateLatenciesMs += durationMs(updateDuration)
+
+            val (stepPred, rankDuration) =
+                predictStepTimed(policy, modelRef, dataset, history, current, tempC, typeById)
+            rankingLatenciesMs += durationMs(rankDuration)
+            check(stepPred.score.isFinite()) { "Non-finite prediction in $policy at step $t: ${stepPred.score}" }
+
+            records += buildObservationError(history, current, tempC, stepPred.ratingEstimate, targetScore)
+            current.entry.surveyWarmthVerdict?.let { actualVerdict ->
+                thermalRecords += buildThermalError(stepPred.thermal, actualVerdict)
+            }
+        }
+
+        val reversalAccuracy = measureWeatherReversal(policy, sorted, dataset, typeById)
+        return EvaluationReport(
+            policyName = policy.name,
+            overall = aggregate(records),
+            sparseHistory = aggregate(records.filter { it.historyCount < RecommendationEngine.MODEL_MIN_SURVEYED }),
+            richHistory = aggregate(records.filter { it.historyCount >= RecommendationEngine.MODEL_MIN_SURVEYED }),
+            repeatedOutfits = aggregate(records.filter { it.isRepeated }),
+            unseenOutfits = aggregate(records.filter { !it.isRepeated }),
+            inRangeTemps = aggregate(records.filter { it.inRange }),
+            outOfRangeTemps = aggregate(records.filter { !it.inRange }),
+            thermal = aggregateThermal(thermalRecords),
+            weatherReversalAccuracy = reversalAccuracy,
+            updateLatencyP50Ms = percentile(updateLatenciesMs, 0.50),
+            updateLatencyP95Ms = percentile(updateLatenciesMs, 0.95),
+            rankingLatencyP50Ms = percentile(rankingLatenciesMs, 0.50),
+            rankingLatencyP95Ms = percentile(rankingLatenciesMs, 0.95),
+        )
+    }
+
+    /**
+     * Measures Kalman + ADF model update latency and 120-candidate scoring latency at arbitrary
+     * feature dimension `d` (used for Phase 3 runtime budget verification at `d = 16` and `d = 32`).
+     */
+    fun benchmarkDimensionLatency(
+        dimension: Int,
+        seed: Int = 7,
+    ): DimensionLatencyReport {
+        val rng = Random(seed)
+        var rating = BayesianRatingModel.prior(dimension)
+        var thermal = BayesianThermalModel.prior(dimension)
+        val raw = RawOutfitSignals(12.0, false, 0.8, 0.4, 0.1, 2.0)
+        val sampleFeatures = List(BENCHMARK_UPDATES) { DoubleArray(dimension) { idx -> if (idx == 0) 1.0 else rng.nextDouble(-1.5, 1.5) } }
+        val verdicts = WarmthVerdict.entries
+        val updateMs = mutableListOf<Double>()
+        sampleFeatures.forEachIndexed { idx, features ->
+            val mark = TimeSource.Monotonic.markNow()
+            rating = BayesianRatingModel.update(rating, features, rng.nextDouble(-1.0, 1.0), deltaDays = 1.0)
+            thermal = BayesianThermalModel.update(thermal, raw, features, verdicts[idx % verdicts.size])
+            updateMs += durationMs(mark.elapsedNow())
+        }
+
+        val candidates = List(LATENCY_CANDIDATE_COUNT) { idx -> sampleFeatures[idx % sampleFeatures.size] }
+        val rankingMs = mutableListOf<Double>()
+        repeat(BENCHMARK_RANK_RUNS) {
+            val mark = TimeSource.Monotonic.markNow()
+            for (features in candidates) {
+                val pred = BayesianComfortModel.predict(rating, thermal, raw, features)
+                check(pred.combinedScore.isFinite())
+            }
+            rankingMs += durationMs(mark.elapsedNow())
+        }
+        return DimensionLatencyReport(
+            dimension = dimension,
+            updateP50Ms = percentile(updateMs, 0.50),
+            updateP95Ms = percentile(updateMs, 0.95),
+            rankingP50Ms = percentile(rankingMs, 0.50),
+            rankingP95Ms = percentile(rankingMs, 0.95),
+        )
+    }
+
+    private fun buildObservationError(
+        history: List<OutfitEntryWithPieces>,
+        current: OutfitEntryWithPieces,
+        tempC: Double,
+        predictedRating: Double,
+        targetScore: Double,
+    ): ObservationError {
+        val seenOutfits = history.map { h -> h.pieces.map { it.id }.sorted() }.toSet()
+        val isRepeated = current.pieces.map { it.id }.sorted() in seenOutfits
+        val historyTemps = history.mapNotNull { entryTemperature(it.entry) }
+        val inRange =
+            historyTemps.isNotEmpty() &&
+                tempC >= (historyTemps.min() - TEMP_MARGIN_C) &&
+                tempC <= (historyTemps.max() + TEMP_MARGIN_C)
+        return ObservationError(
+            error = abs(predictedRating - targetScore),
+            squaredError = (predictedRating - targetScore) * (predictedRating - targetScore),
+            historyCount = history.size,
+            isRepeated = isRepeated,
+            inRange = inRange,
+        )
+    }
+
+    private fun buildThermalError(
+        probs: ThermalProbabilities,
+        actual: WarmthVerdict,
+    ): ThermalObservationError {
+        val pActual =
+            when (actual) {
+                WarmthVerdict.TOO_COLD -> probs.tooCold
+                WarmthVerdict.PERFECT -> probs.perfect
+                WarmthVerdict.TOO_WARM -> probs.tooWarm
+            }.coerceAtLeast(MIN_PROB_CLAMP)
+        val brier =
+            squaredIndicatorDiff(probs.tooCold, actual == WarmthVerdict.TOO_COLD) +
+                squaredIndicatorDiff(probs.perfect, actual == WarmthVerdict.PERFECT) +
+                squaredIndicatorDiff(probs.tooWarm, actual == WarmthVerdict.TOO_WARM)
+        val predicted =
+            when {
+                probs.tooCold >= probs.perfect && probs.tooCold >= probs.tooWarm -> WarmthVerdict.TOO_COLD
+                probs.tooWarm >= probs.perfect && probs.tooWarm >= probs.tooCold -> WarmthVerdict.TOO_WARM
+                else -> WarmthVerdict.PERFECT
+            }
+        val confidence = maxOf(probs.tooCold, probs.perfect, probs.tooWarm)
+        val polarityFlip =
+            (predicted == WarmthVerdict.TOO_COLD && actual == WarmthVerdict.TOO_WARM) ||
+                (predicted == WarmthVerdict.TOO_WARM && actual == WarmthVerdict.TOO_COLD)
+        return ThermalObservationError(
+            logLoss = -kotlin.math.ln(pActual),
+            brier = brier,
+            correct = predicted == actual,
+            confidence = confidence,
+            polarityFlip = polarityFlip,
+        )
+    }
+
+    private fun squaredIndicatorDiff(
+        probability: Double,
+        indicator: Boolean,
+    ): Double {
+        val target = if (indicator) 1.0 else 0.0
+        val diff = probability - target
+        return diff * diff
+    }
+
+    private fun fitPolicyTimed(
+        policy: EvaluationPolicy,
+        history: List<OutfitEntryWithPieces>,
+        clothingTypes: List<ClothingType>,
+        typeById: Map<Long, ClothingType>,
+    ): Pair<Any?, Duration> {
+        val mark = TimeSource.Monotonic.markNow()
+        val fitted: Any? =
+            when {
+                history.isEmpty() -> null
+                policy == EvaluationPolicy.HEURISTIC -> null
+                policy == EvaluationPolicy.ADDITIVE_LINEAR_V1 -> LegacyAdditiveModel.fit(history, typeById)
+                policy == EvaluationPolicy.INTERACTION_RIDGE_V2 -> fitRidgeV2(history, typeById)
+                else -> fitBayesianV3(history, clothingTypes)
+            }
+        return fitted to mark.elapsedNow()
+    }
+
+    private fun fitBayesianV3(
+        history: List<OutfitEntryWithPieces>,
+        clothingTypes: List<ClothingType>,
+    ): DecodedModel? {
+        val snapshot =
+            TrainingSnapshot(
+                entries = history,
+                clothingTypes = clothingTypes,
+                dataRevision = history.size.toLong(),
+                trainedAtEpochMs = history.lastOrNull()?.entry?.surveyedAtEpochMs ?: 0L,
+            )
+        return DecodedModel.decode(BayesianModelTrainer.train(snapshot))
+    }
+
+    private fun fitRidgeV2(
+        history: List<OutfitEntryWithPieces>,
+        typeById: Map<Long, ClothingType>,
+    ): DecodedModel? {
+        val samples =
+            history.mapNotNull { item ->
+                val temp = entryTemperature(item.entry) ?: return@mapNotNull null
+                val score = item.entry.surveyFeelingScore?.toDouble() ?: return@mapNotNull null
+                FeatureExtractor.extractRaw(temp, item.entry.isRainy, item.pieces, typeById) to score
+            }
+        if (samples.isEmpty()) return null
+        val artifact = RidgeRatingModel.fit(samples)
+        val state =
+            ModelState(
+                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
+                dataRevision = 1L,
+                trainedAtEpochMs = 0L,
+                usableSampleCount = samples.size,
+                artifactJson = Json.encodeToString(artifact),
+            )
+        return DecodedModel.decode(state)
+    }
+
+    @Suppress("LongParameterList") // benchmark helper forwards context slices directly
+    private fun predictStepTimed(
+        policy: EvaluationPolicy,
+        modelRef: Any?,
+        dataset: SyntheticDataset,
+        history: List<OutfitEntryWithPieces>,
+        current: OutfitEntryWithPieces,
+        tempC: Double,
+        typeById: Map<Long, ClothingType>,
+    ): Pair<StepPrediction, Duration> {
+        val mark = TimeSource.Monotonic.markNow()
+        val predicted =
+            scoreCandidateForPolicy(
+                policy = policy,
+                modelRef = modelRef,
+                dataset = dataset,
+                history = history,
+                pieces = current.pieces,
+                tempC = tempC,
+                isRainy = current.entry.isRainy,
+                date = current.entry.wornOnDate,
+                typeById = typeById,
+            )
+        return predicted to mark.elapsedNow()
+    }
+
+    @Suppress("LongParameterList") // shared scoring helper across step evaluation and reversal probe
+    private fun scoreCandidateForPolicy(
+        policy: EvaluationPolicy,
+        modelRef: Any?,
+        dataset: SyntheticDataset,
+        history: List<OutfitEntryWithPieces>,
+        pieces: List<ClothingPiece>,
+        tempC: Double,
+        isRainy: Boolean,
+        date: LocalDate,
+        typeById: Map<Long, ClothingType>,
+    ): StepPrediction {
+        val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
+        val heuristicProbs = heuristicThermalBaseline(dataset, history, pieces, tempC, isRainy, date, typeById)
+        return when (policy) {
+            EvaluationPolicy.HEURISTIC -> {
+                val input = heuristicInput(dataset, history, tempC, isRainy, date)
+                val candidate = OutfitCandidate(null, pieces, null, null, RecommendationSource.HEURISTIC)
+                val s = Scoring.heuristicScore(input, candidate, typeById)
+                StepPrediction(score = s, ratingEstimate = s, thermal = heuristicProbs)
+            }
+
+            EvaluationPolicy.ADDITIVE_LINEAR_V1 -> {
+                val coeffs = modelRef as? DoubleArray
+                val s =
+                    if (coeffs == null) {
+                        RidgeRatingModel.priorPrediction(raw)
+                    } else {
+                        LegacyAdditiveModel.predict(coeffs, tempC, isRainy, pieces, typeById)
+                    }
+                StepPrediction(score = s, ratingEstimate = s, thermal = heuristicProbs)
+            }
+
+            EvaluationPolicy.INTERACTION_RIDGE_V2 -> {
+                val model = modelRef as? DecodedModel
+                val s =
+                    if (model == null) {
+                        RidgeRatingModel.priorPrediction(raw)
+                    } else {
+                        RidgeRatingModel.predict(model, tempC, isRainy, pieces, typeById)
+                    }
+                StepPrediction(score = s, ratingEstimate = s, thermal = heuristicProbs)
+            }
+
+            EvaluationPolicy.BAYESIAN_RATING_V3,
+            EvaluationPolicy.BAYESIAN_COMBINED_V3,
+            -> {
+                val model = modelRef as? DecodedModel
+                val comfort =
+                    model?.let { BayesianComfortModel.predict(it, tempC, isRainy, pieces, typeById) }
+                        ?: priorComfortPrediction(raw)
+                val rankingScore =
+                    if (policy == EvaluationPolicy.BAYESIAN_COMBINED_V3) comfort.combinedScore else comfort.rating.mean
+                StepPrediction(score = rankingScore, ratingEstimate = comfort.rating.mean, thermal = comfort.thermal)
+            }
+        }
+    }
+
+    private fun priorComfortPrediction(raw: RawOutfitSignals): ComfortPrediction {
+        val scaler =
+            FeatureScaler(
+                tempCMean = raw.tempC,
+                tempCStd = 1.0,
+                warmthUpperMean = raw.warmthUpper,
+                warmthUpperStd = 1.0,
+                warmthLowerMean = raw.warmthLower,
+                warmthLowerStd = 1.0,
+                warmthHeadAndFeetMean = raw.warmthHeadAndFeet,
+                warmthHeadAndFeetStd = 1.0,
+                layerCountUpperMean = raw.layerCountUpper,
+                layerCountUpperStd = 1.0,
+                totalWarmthMean = raw.totalWarmth,
+                totalWarmthStd = 1.0,
+            )
+        val features = FeatureExtractor.buildFeatures(raw, scaler)
+        return BayesianComfortModel.predict(
+            ratingPosterior = BayesianRatingModel.prior(),
+            thermalPosterior = BayesianThermalModel.prior(),
+            raw = raw,
+            features = features,
+        )
+    }
+
+    @Suppress("LongParameterList") // baseline thermal calibration helper
+    private fun heuristicThermalBaseline(
+        dataset: SyntheticDataset,
+        history: List<OutfitEntryWithPieces>,
+        pieces: List<ClothingPiece>,
+        tempC: Double,
+        isRainy: Boolean,
+        date: LocalDate,
+        typeById: Map<Long, ClothingType>,
+    ): ThermalProbabilities {
+        val ideal = Scoring.idealWarmth(heuristicInput(dataset, history, tempC, isRainy, date), typeById)
+        val mu = 2.0 * (outfitWarmth(pieces, typeById) - ideal)
+        val tau = BayesianThermalModel.DEFAULT_THRESHOLD
+        val cdfCold = StatsFacade.standardNormalCdf(-tau - mu).coerceIn(0.0, 1.0)
+        val cdfWarm = StatsFacade.standardNormalCdf(tau - mu).coerceIn(cdfCold, 1.0)
+        return ThermalProbabilities(
+            tooCold = cdfCold,
+            perfect = (cdfWarm - cdfCold).coerceIn(0.0, 1.0),
+            tooWarm = (1.0 - cdfWarm).coerceIn(0.0, 1.0),
+            latentMean = mu,
+            latentStd = 1.0,
+            epistemicStd = 0.0,
+        )
+    }
+
+    private fun heuristicInput(
+        dataset: SyntheticDataset,
+        history: List<OutfitEntryWithPieces>,
+        tempC: Double,
+        isRainy: Boolean,
+        date: LocalDate,
+    ) = RecommendationInput(
+        date = date,
+        today = date,
+        tempC = tempC,
+        isRainy = isRainy,
+        wardrobePieces = dataset.wardrobe,
+        clothingTypes = dataset.types,
+        entries = history,
+        surveyedCount = history.size,
+        modelState = null,
+    )
+
+    private fun measureWeatherReversal(
+        policy: EvaluationPolicy,
+        history: List<OutfitEntryWithPieces>,
+        dataset: SyntheticDataset,
+        typeById: Map<Long, ClothingType>,
+    ): Double {
+        if (history.isEmpty()) return 0.0
+        val (modelRef, _) = fitPolicyTimed(policy, history, dataset.types, typeById)
+        val (winterOutfit, summerOutfit) = dataset.coldPairTest
+        val probeDate = history.last().entry.wornOnDate
+        val winterAt4 = scoreCandidateForPolicy(policy, modelRef, dataset, history, winterOutfit, 4.0, false, probeDate, typeById).score
+        val summerAt4 = scoreCandidateForPolicy(policy, modelRef, dataset, history, summerOutfit, 4.0, false, probeDate, typeById).score
+        val winterAt26 = scoreCandidateForPolicy(policy, modelRef, dataset, history, winterOutfit, 26.0, false, probeDate, typeById).score
+        val summerAt26 = scoreCandidateForPolicy(policy, modelRef, dataset, history, summerOutfit, 26.0, false, probeDate, typeById).score
+        val coldCorrect = if (winterAt4 > summerAt4) 1.0 else 0.0
+        val warmCorrect = if (summerAt26 > winterAt26) 1.0 else 0.0
+        return (coldCorrect + warmCorrect) / 2.0
+    }
+
+    private fun aggregate(items: List<ObservationError>): SliceMetrics {
+        if (items.isEmpty()) return SliceMetrics(count = 0, mae = 0.0, rmse = 0.0)
+        val mae = items.sumOf { it.error } / items.size
+        val rmse = sqrt(items.sumOf { it.squaredError } / items.size)
+        return SliceMetrics(count = items.size, mae = mae, rmse = rmse)
+    }
+
+    private fun aggregateThermal(items: List<ThermalObservationError>): ThermalCalibrationMetrics {
+        if (items.isEmpty()) {
+            return ThermalCalibrationMetrics(0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        }
+        val bins = Array(ECE_BINS) { mutableListOf<ThermalObservationError>() }
+        for (item in items) {
+            val binIdx = (item.confidence * ECE_BINS).toInt().coerceIn(0, ECE_BINS - 1)
+            bins[binIdx].add(item)
+        }
+        val ece =
+            bins.sumOf { bin ->
+                if (bin.isEmpty()) {
+                    0.0
+                } else {
+                    val acc = bin.count { it.correct }.toDouble() / bin.size
+                    val conf = bin.sumOf { it.confidence } / bin.size
+                    (bin.size.toDouble() / items.size) * abs(acc - conf)
+                }
+            }
+        return ThermalCalibrationMetrics(
+            count = items.size,
+            ordinalLogLoss = items.sumOf { it.logLoss } / items.size,
+            brierScore = items.sumOf { it.brier } / items.size,
+            expectedCalibrationError = ece,
+            misclassificationRate = items.count { !it.correct }.toDouble() / items.size,
+            extremePolarityErrorRate = items.count { it.polarityFlip }.toDouble() / items.size,
+        )
+    }
+
+    private fun percentile(
+        values: List<Double>,
+        quantile: Double,
+    ): Double {
+        if (values.isEmpty()) return 0.0
+        val sorted = values.sorted()
+        val index = ((sorted.size - 1) * quantile).roundToInt().coerceIn(0, sorted.lastIndex)
+        return sorted[index]
+    }
+
+    private fun durationMs(duration: Duration): Double = duration.inWholeNanoseconds / 1_000_000.0
+}
+
+private data class StepPrediction(
+    val score: Double,
+    val ratingEstimate: Double,
+    val thermal: ThermalProbabilities,
+)
+
+private data class ObservationError(
+    val error: Double,
+    val squaredError: Double,
+    val historyCount: Int,
+    val isRepeated: Boolean,
+    val inRange: Boolean,
+)
+
+private data class ThermalObservationError(
+    val logLoss: Double,
+    val brier: Double,
+    val correct: Boolean,
+    val confidence: Double,
+    val polarityFlip: Boolean,
 )
 
 internal data class SyntheticDataset(
@@ -223,250 +725,6 @@ internal object SyntheticPersonas {
         thumbnailPath = "",
     )
 }
-
-internal enum class EvaluationPolicy {
-    HEURISTIC,
-    ADDITIVE_LINEAR_V1,
-    INTERACTION_RIDGE_V2,
-}
-
-/**
- * Pure common chronological (prequential) evaluation harness: sorts logged entries by wear/survey
- * timestamp and scores observation `t` strictly from entries `[0 until t]`.
- */
-internal object EvaluationHarness {
-    private val entryOrder =
-        compareBy<OutfitEntryWithPieces>(
-            { it.entry.wornOnDate },
-            { it.entry.surveyedAtEpochMs ?: Long.MAX_VALUE },
-            { it.entry.createdAtEpochMs },
-            { it.entry.id },
-        )
-
-    fun evaluate(
-        dataset: SyntheticDataset,
-        policy: EvaluationPolicy,
-    ): EvaluationReport {
-        val sorted =
-            dataset.entries
-                .filter { it.entry.surveyFeelingScore != null && entryTemperature(it.entry) != null }
-                .sortedWith(entryOrder)
-        val typeById = dataset.types.associateBy { it.id }
-        val records = mutableListOf<ObservationError>()
-        val updateLatenciesMs = mutableListOf<Double>()
-        val rankingLatenciesMs = mutableListOf<Double>()
-
-        for (t in sorted.indices) {
-            val current = sorted[t]
-            val targetScore = current.entry.surveyFeelingScore!!.toDouble()
-            val tempC = entryTemperature(current.entry)!!
-            val history = sorted.subList(0, t)
-
-            val (modelRef, updateDuration) = fitPolicyTimed(policy, history, typeById)
-            if (history.isNotEmpty()) updateLatenciesMs += durationMs(updateDuration)
-
-            val (predicted, rankDuration) =
-                predictTimed(policy, modelRef, dataset, history, current, tempC, typeById)
-            rankingLatenciesMs += durationMs(rankDuration)
-            check(predicted.isFinite()) { "Non-finite prediction in $policy at step $t: $predicted" }
-
-            val seenOutfits = history.map { h -> h.pieces.map { it.id }.sorted() }.toSet()
-            val isRepeated = current.pieces.map { it.id }.sorted() in seenOutfits
-            val historyTemps = history.mapNotNull { entryTemperature(it.entry) }
-            val inRange =
-                historyTemps.isNotEmpty() &&
-                    tempC >= (historyTemps.min() - TEMP_MARGIN_C) &&
-                    tempC <= (historyTemps.max() + TEMP_MARGIN_C)
-            records +=
-                ObservationError(
-                    error = abs(predicted - targetScore),
-                    squaredError = (predicted - targetScore) * (predicted - targetScore),
-                    historyCount = history.size,
-                    isRepeated = isRepeated,
-                    inRange = inRange,
-                )
-        }
-
-        val reversalAccuracy = measureWeatherReversal(policy, sorted, dataset, typeById)
-        return EvaluationReport(
-            policyName = policy.name,
-            overall = aggregate(records),
-            sparseHistory = aggregate(records.filter { it.historyCount < RecommendationEngine.MODEL_MIN_SURVEYED }),
-            richHistory = aggregate(records.filter { it.historyCount >= RecommendationEngine.MODEL_MIN_SURVEYED }),
-            repeatedOutfits = aggregate(records.filter { it.isRepeated }),
-            unseenOutfits = aggregate(records.filter { !it.isRepeated }),
-            inRangeTemps = aggregate(records.filter { it.inRange }),
-            outOfRangeTemps = aggregate(records.filter { !it.inRange }),
-            weatherReversalAccuracy = reversalAccuracy,
-            updateLatencyP50Ms = percentile(updateLatenciesMs, 0.50),
-            updateLatencyP95Ms = percentile(updateLatenciesMs, 0.95),
-            rankingLatencyP50Ms = percentile(rankingLatenciesMs, 0.50),
-            rankingLatencyP95Ms = percentile(rankingLatenciesMs, 0.95),
-        )
-    }
-
-    private fun fitPolicyTimed(
-        policy: EvaluationPolicy,
-        history: List<OutfitEntryWithPieces>,
-        typeById: Map<Long, ClothingType>,
-    ): Pair<Any?, Duration> {
-        val mark = TimeSource.Monotonic.markNow()
-        val fitted: Any? =
-            when {
-                history.isEmpty() -> null
-                policy == EvaluationPolicy.HEURISTIC -> null
-                policy == EvaluationPolicy.ADDITIVE_LINEAR_V1 -> LegacyAdditiveModel.fit(history, typeById)
-                else -> fitRidgeV2(history, typeById)
-            }
-        return fitted to mark.elapsedNow()
-    }
-
-    private fun fitRidgeV2(
-        history: List<OutfitEntryWithPieces>,
-        typeById: Map<Long, ClothingType>,
-    ): DecodedModel? {
-        val samples =
-            history.mapNotNull { item ->
-                val temp = entryTemperature(item.entry) ?: return@mapNotNull null
-                val score = item.entry.surveyFeelingScore?.toDouble() ?: return@mapNotNull null
-                FeatureExtractor.extractRaw(temp, item.entry.isRainy, item.pieces, typeById) to score
-            }
-        if (samples.isEmpty()) return null
-        val artifact = RidgeRatingModel.fit(samples)
-        val state =
-            ModelState(
-                schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
-                dataRevision = 1L,
-                trainedAtEpochMs = 0L,
-                usableSampleCount = samples.size,
-                artifactJson = Json.encodeToString(artifact),
-            )
-        return DecodedModel.decode(state)
-    }
-
-    @Suppress("LongParameterList") // benchmark helper forwards context slices directly
-    private fun predictTimed(
-        policy: EvaluationPolicy,
-        modelRef: Any?,
-        dataset: SyntheticDataset,
-        history: List<OutfitEntryWithPieces>,
-        current: OutfitEntryWithPieces,
-        tempC: Double,
-        typeById: Map<Long, ClothingType>,
-    ): Pair<Double, Duration> {
-        val mark = TimeSource.Monotonic.markNow()
-        val predicted =
-            scoreCandidateForPolicy(
-                policy = policy,
-                modelRef = modelRef,
-                dataset = dataset,
-                history = history,
-                pieces = current.pieces,
-                tempC = tempC,
-                isRainy = current.entry.isRainy,
-                date = current.entry.wornOnDate,
-                typeById = typeById,
-            )
-        return predicted to mark.elapsedNow()
-    }
-
-    @Suppress("LongParameterList") // shared scoring helper across step evaluation and reversal probe
-    private fun scoreCandidateForPolicy(
-        policy: EvaluationPolicy,
-        modelRef: Any?,
-        dataset: SyntheticDataset,
-        history: List<OutfitEntryWithPieces>,
-        pieces: List<ClothingPiece>,
-        tempC: Double,
-        isRainy: Boolean,
-        date: LocalDate,
-        typeById: Map<Long, ClothingType>,
-    ): Double =
-        when (policy) {
-            EvaluationPolicy.HEURISTIC -> {
-                val input =
-                    RecommendationInput(
-                        date = date,
-                        today = date,
-                        tempC = tempC,
-                        isRainy = isRainy,
-                        wardrobePieces = dataset.wardrobe,
-                        clothingTypes = dataset.types,
-                        entries = history,
-                        surveyedCount = history.size,
-                        modelState = null,
-                    )
-                val candidate = OutfitCandidate(null, pieces, null, null, RecommendationSource.HEURISTIC)
-                Scoring.heuristicScore(input, candidate, typeById)
-            }
-
-            EvaluationPolicy.ADDITIVE_LINEAR_V1 -> {
-                val coeffs = modelRef as? DoubleArray
-                if (coeffs == null) {
-                    val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
-                    RidgeRatingModel.priorPrediction(raw)
-                } else {
-                    LegacyAdditiveModel.predict(coeffs, tempC, isRainy, pieces, typeById)
-                }
-            }
-
-            EvaluationPolicy.INTERACTION_RIDGE_V2 -> {
-                val model = modelRef as? DecodedModel
-                if (model == null) {
-                    val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
-                    RidgeRatingModel.priorPrediction(raw)
-                } else {
-                    RidgeRatingModel.predict(model, tempC, isRainy, pieces, typeById)
-                }
-            }
-        }
-
-    private fun measureWeatherReversal(
-        policy: EvaluationPolicy,
-        history: List<OutfitEntryWithPieces>,
-        dataset: SyntheticDataset,
-        typeById: Map<Long, ClothingType>,
-    ): Double {
-        if (history.isEmpty()) return 0.0
-        val (modelRef, _) = fitPolicyTimed(policy, history, typeById)
-        val (winterOutfit, summerOutfit) = dataset.coldPairTest
-        val probeDate = history.last().entry.wornOnDate
-        val winterAt4 = scoreCandidateForPolicy(policy, modelRef, dataset, history, winterOutfit, 4.0, false, probeDate, typeById)
-        val summerAt4 = scoreCandidateForPolicy(policy, modelRef, dataset, history, summerOutfit, 4.0, false, probeDate, typeById)
-        val winterAt26 = scoreCandidateForPolicy(policy, modelRef, dataset, history, winterOutfit, 26.0, false, probeDate, typeById)
-        val summerAt26 = scoreCandidateForPolicy(policy, modelRef, dataset, history, summerOutfit, 26.0, false, probeDate, typeById)
-        val coldCorrect = if (winterAt4 > summerAt4) 1.0 else 0.0
-        val warmCorrect = if (summerAt26 > winterAt26) 1.0 else 0.0
-        return (coldCorrect + warmCorrect) / 2.0
-    }
-
-    private fun aggregate(items: List<ObservationError>): SliceMetrics {
-        if (items.isEmpty()) return SliceMetrics(count = 0, mae = 0.0, rmse = 0.0)
-        val mae = items.sumOf { it.error } / items.size
-        val rmse = sqrt(items.sumOf { it.squaredError } / items.size)
-        return SliceMetrics(count = items.size, mae = mae, rmse = rmse)
-    }
-
-    private fun percentile(
-        values: List<Double>,
-        quantile: Double,
-    ): Double {
-        if (values.isEmpty()) return 0.0
-        val sorted = values.sorted()
-        val index = ((sorted.size - 1) * quantile).roundToInt().coerceIn(0, sorted.lastIndex)
-        return sorted[index]
-    }
-
-    private fun durationMs(duration: Duration): Double = duration.inWholeNanoseconds / 1_000_000.0
-}
-
-private data class ObservationError(
-    val error: Double,
-    val squaredError: Double,
-    val historyCount: Int,
-    val isRepeated: Boolean,
-    val inRange: Boolean,
-)
 
 /**
  * Legacy 8-feature additive linear regression retained strictly inside test code to measure

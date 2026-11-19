@@ -121,7 +121,7 @@ class RidgeRatingModelTest {
         val artifact = RidgeRatingModel.fit(samples)
         val modelState =
             ModelState(
-                schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
                 dataRevision = 1L,
                 trainedAtEpochMs = 1_800_000_000_000L,
                 usableSampleCount = samples.size,
@@ -152,14 +152,14 @@ class RidgeRatingModelTest {
         val validArtifact = RecommendationModelArtifact(scaler = validScaler, ridgeWeights = List(FeatureExtractor.FEATURE_COUNT) { 0.0 })
         val validState =
             ModelState(
-                schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
                 dataRevision = 1L,
                 trainedAtEpochMs = 1L,
                 usableSampleCount = 1,
                 artifactJson = Json.encodeToString(validArtifact),
             )
         assertNotNull(DecodedModel.decode(validState))
-        assertNull(DecodedModel.decode(validState.copy(schemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION + 1)))
+        assertNull(DecodedModel.decode(validState.copy(schemaVersion = ModelState.CURRENT_SCHEMA_VERSION + 1)))
         assertNull(DecodedModel.decode(validState.copy(artifactJson = "{not-valid-json")))
 
         val wrongSizeArtifact = validArtifact.copy(ridgeWeights = listOf(0.0, 1.0))
