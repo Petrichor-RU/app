@@ -12,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,43 +29,14 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.kizitonwose.calendar.core.now
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
-import nl.petrichor.app.data.outfit.OutfitLogRepository
-import nl.petrichor.app.data.recommendation.RecommendationEngine
-import nl.petrichor.app.data.recommendation.RecommendationInput
 import nl.petrichor.app.data.recommendation.dayWeatherFor
 import nl.petrichor.app.data.recommendation.forecastDates
-import nl.petrichor.app.data.recommendation.tempC
-import nl.petrichor.app.data.wardrobe.WardrobeRepository
 import nl.petrichor.app.ui.BoxMessage
 import nl.petrichor.app.ui.background.AppWeatherState
-
-private class RecommendationController : ViewModel() {
-    private val wardrobeRepository = WardrobeRepository()
-    private val outfitRepository = OutfitLogRepository()
-
-    val allClothing = wardrobeRepository.getAllClothing()
-    val clothingTypes = wardrobeRepository.getClothingTypes()
-    val entries = outfitRepository.entries
-    val surveyedCount = outfitRepository.surveyedCount
-    val modelState = outfitRepository.modelState
-    val laundryVersion =
-        combine(outfitRepository.laundryVersion, wardrobeRepository.laundryVersion) { outfit, piece -> outfit + piece }
-
-    fun markPieceLaundry(
-        pieceId: Long,
-        days: Int,
-    ) {
-        viewModelScope.launch { wardrobeRepository.markLaundry(pieceId, days) }
-    }
-}
 
 /**
  * Suggestions tab: the calendar stays on top and the screen opens scrolled
@@ -82,45 +54,35 @@ fun RecommendationScreen(
         return
     }
 
-    val controller = viewModel { RecommendationController() }
-    val locationName = weatherState.place?.name ?: "Finding your location..."
-    val weather = weatherState.weather
-    val allClothing by controller.allClothing.collectAsStateWithLifecycle(emptyList())
-    val clothingTypes by controller.clothingTypes.collectAsStateWithLifecycle(emptyList())
-    val entries by controller.entries.collectAsStateWithLifecycle(emptyList())
-    val surveyedCount by controller.surveyedCount.collectAsStateWithLifecycle(0)
-    val modelState by controller.modelState.collectAsStateWithLifecycle(null)
-    val laundryVersion by controller.laundryVersion.collectAsStateWithLifecycle(0)
     val today = remember { LocalDate.now() }
-    val candidates =
-        remember(allClothing, clothingTypes, entries, surveyedCount, modelState, weather, laundryVersion, today) {
-            val dayWeather = weather.dayWeatherFor(today, today)
-            RecommendationEngine.recommendOutfits(
-                RecommendationInput(
-                    date = today,
-                    today = today,
-                    tempC = dayWeather.tempC,
-                    isRainy = dayWeather.isRainy,
-                    wardrobePieces = allClothing,
-                    clothingTypes = clothingTypes,
-                    entries = entries,
-                    surveyedCount = surveyedCount,
-                    modelState = modelState,
-                ),
-            )
-        }
+    val controller = viewModel { RecommendationController(today = today) }
+    var selectedDateIso by rememberSaveable { mutableStateOf(today.toString()) }
+    val selectedDate = LocalDate.parse(selectedDateIso)
+
+    LaunchedEffect(selectedDate) { controller.selectDate(selectedDate) }
+    LaunchedEffect(weatherState.weather) { controller.updateWeather(weatherState.weather) }
+
+    val locationName = weatherState.place?.name ?: "Finding your location..."
+    val candidates by controller.candidates.collectAsStateWithLifecycle()
+    val clothingTypes by controller.clothingTypes.collectAsStateWithLifecycle(emptyList())
+    val laundryVersion by controller.laundryVersion.collectAsStateWithLifecycle(0)
 
     RecommendationContent(
         modifier = modifier,
         uiState =
             RecommendationUiState(
                 locationName = locationName,
-                weather = weather,
+                weather = weatherState.weather,
                 today = today,
                 candidates = candidates,
                 clothingTypes = clothingTypes,
                 laundryVersion = laundryVersion,
+                selectedDate = selectedDate,
             ),
+        onDateSelected = { date ->
+            selectedDateIso = date.toString()
+            controller.selectDate(date)
+        },
         onMarkPieceLaundry = { pieceId, days -> controller.markPieceLaundry(pieceId, days) },
     )
 }
@@ -184,11 +146,10 @@ private fun rememberCalendarHeaderPull(listState: LazyListState): CalendarHeader
 internal fun RecommendationContent(
     modifier: Modifier = Modifier,
     uiState: RecommendationUiState,
+    onDateSelected: (LocalDate) -> Unit = {},
     onMarkPieceLaundry: (pieceId: Long, days: Int) -> Unit,
 ) {
-    var selectedDateIso by rememberSaveable { mutableStateOf(uiState.today.toString()) }
-    val selectedDate = LocalDate.parse(selectedDateIso)
-    val dayWeather = uiState.weather.dayWeatherFor(selectedDate, uiState.today)
+    val dayWeather = uiState.weather.dayWeatherFor(uiState.selectedDate, uiState.today)
 
     // Opens scrolled below the calendar (item 1); the lazy-list state saver keeps the position.
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = 1)
@@ -207,9 +168,9 @@ internal fun RecommendationContent(
     ) {
         item {
             RecommendationCalendar(
-                selectedDate = selectedDate,
+                selectedDate = uiState.selectedDate,
                 today = uiState.today,
-                onDateSelected = { date -> selectedDateIso = date.toString() },
+                onDateSelected = onDateSelected,
                 forecastDates = uiState.weather?.forecastDates(uiState.today).orEmpty(),
                 headerVisible = headerPull.headerVisible,
             )

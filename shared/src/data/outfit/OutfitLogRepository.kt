@@ -8,19 +8,15 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
-import kotlinx.serialization.json.Json
 import nl.petrichor.app.data.database.defaultClothingDao
 import nl.petrichor.app.data.database.defaultOutfitDao
 import nl.petrichor.app.data.media.MediaStorage
-import nl.petrichor.app.data.recommendation.LinearRegression
-import nl.petrichor.app.data.recommendation.WarmthEncoding
+import nl.petrichor.app.data.recommendation.RecommendationTrainingCoordinator
 import nl.petrichor.app.data.wardrobe.ClothingDao
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import kotlin.time.Clock
@@ -45,10 +41,23 @@ class OutfitLogRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val imageDeleter: suspend (String) -> Unit = { path -> MediaStorage.deleteImage(path) },
     private val appScope: CoroutineScope = outfitAppScope,
+    trainingCoordinator: RecommendationTrainingCoordinator? = null,
 ) {
+    private val coordinator: RecommendationTrainingCoordinator by lazy {
+        trainingCoordinator ?: RecommendationTrainingCoordinator(
+            outfitDao = outfitDao,
+            clothingDao = clothingDao,
+            ioDispatcher = ioDispatcher,
+            appScope = appScope,
+        )
+    }
+
     val entries: Flow<List<OutfitEntryWithPieces>> = outfitDao.getAll()
 
     val surveyedCount: Flow<Int> = outfitDao.countSurveyed()
+
+    /** Count of surveyed entries with weather temperature and at least one linked garment. */
+    val usableTrainingCount: Flow<Int> = outfitDao.countUsableTrainingEntries()
 
     /** Trained warmth-model state (null until the first retrain); drives MODEL-mode recommendations. */
     val modelState: Flow<ModelState?> = outfitDao.observeModelState()
@@ -78,11 +87,15 @@ class OutfitLogRepository(
         entry: OutfitEntry,
         pieces: List<ClothingPiece>,
     ) = withContext(ioDispatcher) {
+        val previous = outfitDao.getById(entry.id)?.entry
         outfitDao.updateEntry(entry)
         outfitDao.clearEntryPieces(entry.id)
         outfitDao.insertEntryPieces(
             pieces.mapIndexed { index, piece -> OutfitEntryPiece(entryId = entry.id, pieceId = piece.id, orderIndex = index) },
         )
+        if (entry.surveyFeelingScore != null || previous?.surveyFeelingScore != null) {
+            coordinator.notifyDataChanged()
+        }
     }
 
     suspend fun saveSurvey(
@@ -91,7 +104,7 @@ class OutfitLogRepository(
         verdict: WarmthVerdict,
     ) = withContext(ioDispatcher) {
         outfitDao.setSurvey(entryId, score, verdict, Clock.System.now().toEpochMilliseconds())
-        scheduleRetrain()
+        coordinator.notifyDataChanged()
     }
 
     suspend fun markOutfitLaundry(
@@ -106,7 +119,7 @@ class OutfitLogRepository(
         withContext(ioDispatcher) {
             outfitDao.deleteEntry(entry)
             entry.photoPath?.let { imageDeleter(it) }
-            scheduleRetrain() // deleting an entry shrinks the training data
+            coordinator.notifyDataChanged() // deleting an entry may shrink or empty training data
         }
 
     suspend fun mostRecentUnsurveyedToday(): OutfitEntryWithPieces? =
@@ -124,49 +137,11 @@ class OutfitLogRepository(
         }
 
     /**
-     * Retrains lazily at app start when the stored model is older than the newest survey.
+     * Retrains lazily at app start when the stored model is missing, stale, or mismatched.
      * Call once from the app shell.
      */
     fun ensureModelFresh() {
-        appScope.launch(ioDispatcher) {
-            val state = outfitDao.getModelState()
-            val newestSurvey = outfitDao.getNewestSurveyEpochMs()
-            if (state == null || (newestSurvey != null && state.trainedAtEpochMs < newestSurvey)) {
-                retrain()
-            }
-        }
-    }
-
-    private fun scheduleRetrain() {
-        appScope.launch(ioDispatcher) { retrain() }
-    }
-
-    private suspend fun retrain() {
-        val typeById = clothingDao.getTypes().first().associateBy { it.id }
-        val samples =
-            outfitDao.getTrainingEntries().mapNotNull { entryWithPieces ->
-                val entry = entryWithPieces.entry
-                val tempC =
-                    when {
-                        entry.minTempC != null && entry.maxTempC != null -> (entry.minTempC + entry.maxTempC) / 2
-                        else -> entry.temperatureC
-                    }
-                val score = entry.surveyFeelingScore
-                if (tempC != null && score != null) {
-                    WarmthEncoding.featureVector(tempC, entry.isRainy, entryWithPieces.pieces, typeById) to score.toDouble()
-                } else {
-                    null
-                }
-            }
-        if (samples.isEmpty()) return
-        val coefficients = LinearRegression.fit(samples)
-        outfitDao.insertModelState(
-            ModelState(
-                coefficientsJson = Json.encodeToString(coefficients.toList()),
-                trainedAtEpochMs = Clock.System.now().toEpochMilliseconds(),
-                sampleCount = samples.size,
-            ),
-        )
+        coordinator.ensureModelFresh()
     }
 
     companion object {

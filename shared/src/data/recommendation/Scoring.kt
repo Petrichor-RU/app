@@ -1,33 +1,68 @@
 package nl.petrichor.app.data.recommendation
 
-import kotlinx.serialization.json.Json
 import nl.petrichor.app.data.outfit.WarmthVerdict
+import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
 import kotlin.math.abs
 import kotlin.math.min
 
 /**
- * Candidate scoring: MODEL predicts the 1-5 feeling score with the trained
- * linear regression, HEURISTIC compares actual vs ideal warmth, FALLBACK ranks logged outfits
- * above the single constructed one.
+ * Candidate scoring:
+ * - MODEL predicts the 1–5 feeling score with the decoded trained regression model.
+ * - HEURISTIC compares actual vs ideal warmth.
+ * - FALLBACK ranks logged outfits above the single constructed suggestion.
+ * Selfie-only candidates (empty piece list) compete in MODEL/HEURISTIC using their own past
+ * survey feeling score plus the temperature-distance penalty rather than garment warmth.
  */
 internal object Scoring {
     private const val RAINY_BONUS = 0.3
     private const val DEFAULT_IDEAL_WARMTH = 3.0
+    private const val DEFAULT_SELFIE_HISTORY_SCORE = 3.0
 
-    /** MODEL: predicted feeling score clamped to 1..5. */
-    fun modelScore(
-            input: RecommendationInput,
+    fun scoreCandidate(
+        input: RecommendationInput,
         candidate: OutfitCandidate,
         typeById: Map<Long, ClothingType>,
+        mode: RecommendationMode,
+        decodedModel: DecodedModel?,
     ): Double {
-        val state = input.modelState
-        val tempC = input.tempC
-        if (state == null || tempC == null) return 0.0
-        val coefficients = Json.decodeFromString<List<Double>>(state.coefficientsJson).toDoubleArray()
-        val features = WarmthEncoding.featureVector(tempC, input.isRainy, candidate.pieces, typeById)
-        return LinearRegression.predict(coefficients, features).coerceIn(1.0, 5.0)
+        val baseScore =
+            when {
+                mode == RecommendationMode.FALLBACK -> fallbackRank(candidate)
+                candidate.pieces.isEmpty() && candidate.loggedEntry != null -> selfieHistoryScore(candidate)
+                mode == RecommendationMode.MODEL -> modelScore(input, candidate.pieces, typeById, decodedModel)
+                else -> heuristicScore(input, candidate, typeById)
+            }
+        return baseScore - temperaturePenalty(candidate, input.tempC)
     }
+
+    /** MODEL: predicted feeling score clamped to 1..5 using pre-decoded model coefficients. */
+    fun modelScore(
+        input: RecommendationInput,
+        pieces: List<ClothingPiece>,
+        typeById: Map<Long, ClothingType>,
+        decodedModel: DecodedModel?,
+    ): Double {
+        val tempC = input.tempC
+        val model = decodedModel ?: DecodedModel.decode(input.modelState)
+        return if (tempC == null || model == null) {
+            0.0
+        } else {
+            val features = WarmthEncoding.featureVector(tempC, input.isRainy, pieces, typeById)
+            if (features.size == model.coefficients.size) {
+                LinearRegression.predict(model.coefficients, features).coerceIn(1.0, 5.0)
+            } else {
+                0.0
+            }
+        }
+    }
+
+    /** Convenience overload kept for unit tests and legacy callers. */
+    fun modelScore(
+        input: RecommendationInput,
+        candidate: OutfitCandidate,
+        typeById: Map<Long, ClothingType>,
+    ): Double = modelScore(input, candidate.pieces, typeById, DecodedModel.decode(input.modelState))
 
     /** HEURISTIC: 5 minus the warmth distance to the ideal, capped at a 4-point penalty. */
     fun heuristicScore(
@@ -47,6 +82,14 @@ internal object Scoring {
             candidate.generalSuggestion != null -> 1.0
             else -> 0.0
         }
+
+    private fun selfieHistoryScore(candidate: OutfitCandidate): Double =
+        candidate.loggedEntry
+            ?.entry
+            ?.surveyFeelingScore
+            ?.toDouble()
+            ?.coerceIn(1.0, 5.0)
+            ?: DEFAULT_SELFIE_HISTORY_SCORE
 
     /**
      * Ideal total warmth (upper + lower) at the forecast temperature, learned from the survey

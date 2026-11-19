@@ -46,6 +46,7 @@ import dev.catbit.material_symbols.MaterialSymbols
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.media.MediaStorage
+import nl.petrichor.app.data.recommendation.SharedTrainingCoordinator
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.WardrobeRepository
 import nl.petrichor.app.platform.BackHandler
@@ -56,7 +57,7 @@ import nl.petrichor.app.ui.BoxMessage
  */
 @Suppress("TooGenericExceptionCaught") // repository failures are surfaced as snackbars, so any exception is handled
 class WardrobeViewModel : ViewModel() {
-    private val repository = WardrobeRepository()
+    private val repository = WardrobeRepository(trainingCoordinator = SharedTrainingCoordinator.instance)
     val allClothing = repository.getAllClothing()
     val clothingTypes = repository.getClothingTypes()
 

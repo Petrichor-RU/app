@@ -1,18 +1,23 @@
 package nl.petrichor.app.data.wardrobe
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import nl.petrichor.app.data.outfit.FakeOutfitDao
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryPiece
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
+import nl.petrichor.app.data.recommendation.RecommendationTrainingCoordinator
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class WardrobeRepositoryTest {
     @Test
     fun `adding a new item supplies a creation timestamp`() =
@@ -124,6 +129,54 @@ class WardrobeRepositoryTest {
         assertTrue(repository.pieceIsInLaundry(inLaundry, nowEpochMs = 500L))
         assertFalse(repository.pieceIsInLaundry(inLaundry, nowEpochMs = 1000L))
     }
+
+    @Test
+    fun `updateClothing retrains only when type or material changes on a worn piece`() =
+        runTest {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val clothingDao = FakeClothingDao()
+            val outfitDao = FakeOutfitDao()
+            val wornPiece = clothing(createdAt = 1L).copy(id = 7L, typeId = 1L, material = Material.COTTON)
+            val unwornPiece = clothing(createdAt = 1L).copy(id = 8L, typeId = 1L, material = Material.COTTON)
+            clothingDao.clothing.value = listOf(wornPiece, unwornPiece)
+            val entry = outfitEntry(id = 1L)
+            outfitDao.entries.value =
+                listOf(
+                    OutfitEntryWithPieces(
+                        entry.entry.copy(temperatureC = 15.0, surveyFeelingScore = 4),
+                        listOf(wornPiece),
+                    ),
+                )
+            outfitDao.links += OutfitEntryPiece(entryId = 1L, pieceId = 7L)
+            val coordinator =
+                RecommendationTrainingCoordinator(
+                    outfitDao = outfitDao,
+                    clothingDao = clothingDao,
+                    ioDispatcher = dispatcher,
+                    appScope = this,
+                )
+            val repository = WardrobeRepository(clothingDao, outfitDao, dispatcher, trainingCoordinator = coordinator) {}
+
+            // Name/notes edit on worn piece does not trigger retrain.
+            repository.updateClothing(wornPiece.copy(name = "Updated name", notes = "Updated notes"))
+            advanceUntilIdle()
+            assertEquals(0L, coordinator.dataRevision.value)
+
+            // Material edit on unworn piece does not trigger retrain.
+            repository.updateClothing(unwornPiece.copy(material = Material.WOOL))
+            advanceUntilIdle()
+            assertEquals(0L, coordinator.dataRevision.value)
+
+            // Type edit on worn piece DOES trigger retrain.
+            repository.updateClothing(wornPiece.copy(typeId = 2L))
+            advanceUntilIdle()
+            assertEquals(1L, coordinator.dataRevision.value)
+
+            // Material edit on worn piece DOES trigger retrain.
+            repository.updateClothing(wornPiece.copy(typeId = 2L, material = Material.WOOL))
+            advanceUntilIdle()
+            assertEquals(2L, coordinator.dataRevision.value)
+        }
 
     private fun clothing(createdAt: Long) =
         ClothingPiece(

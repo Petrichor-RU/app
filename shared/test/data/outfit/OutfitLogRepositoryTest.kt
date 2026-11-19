@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.outfit
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlinx.datetime.LocalDate
@@ -55,7 +56,19 @@ class OutfitLogRepositoryTest {
     fun `saving a survey updates the entry and triggers a retrain`() =
         runTest {
             val dao = FakeOutfitDao()
-            dao.entries.value = listOf(entryWithSurvey(id = 5L, score = null, minTempC = 10.0, maxTempC = 20.0, temperatureC = 15.0))
+            val linkedPiece = piece(1L)
+            dao.entries.value =
+                listOf(
+                    entryWithSurvey(
+                        id = 5L,
+                        score = null,
+                        minTempC = 10.0,
+                        maxTempC = 20.0,
+                        temperatureC = 15.0,
+                        pieces = listOf(linkedPiece),
+                    ),
+                )
+            dao.links += OutfitEntryPiece(entryId = 5L, pieceId = 1L)
             val repository = OutfitLogRepository(dao, FakeClothingDao(), Dispatchers.Unconfined, imageDeleter = {}, appScope = this)
 
             repository.saveSurvey(5L, 4, WarmthVerdict.PERFECT)
@@ -69,6 +82,48 @@ class OutfitLogRepositoryTest {
             assertEquals(4, survey.second)
             assertEquals(WarmthVerdict.PERFECT, survey.third)
             // retrain ran in the background scope and persisted a model state row
+            val model = dao.modelStates.lastOrNull()
+            assertNotNull(model)
+            assertEquals(1, model.sampleCount)
+        }
+
+    @Test
+    fun `selfie-only surveyed entry does not train garment model and is excluded from usableTrainingCount`() =
+        runTest {
+            val dao = FakeOutfitDao()
+            dao.entries.value = listOf(entryWithSurvey(id = 6L, score = null, minTempC = 10.0, maxTempC = 20.0, temperatureC = 15.0))
+            val repository = OutfitLogRepository(dao, FakeClothingDao(), Dispatchers.Unconfined, imageDeleter = {}, appScope = this)
+
+            repository.saveSurvey(6L, 5, WarmthVerdict.PERFECT)
+            repeat(5) { yield() }
+
+            assertNull(dao.modelStates.lastOrNull())
+            assertEquals(0, repository.usableTrainingCount.first())
+        }
+
+    @Test
+    fun `updating a surveyed entry triggers retraining`() =
+        runTest {
+            val dao = FakeOutfitDao()
+            val linkedPiece = piece(1L)
+            val initial =
+                entryWithSurvey(
+                    id = 7L,
+                    score = 4,
+                    minTempC = 10.0,
+                    maxTempC = 20.0,
+                    temperatureC = 15.0,
+                    pieces = listOf(linkedPiece),
+                )
+            dao.entries.value = listOf(initial)
+            dao.links += OutfitEntryPiece(entryId = 7L, pieceId = 1L)
+            val repository = OutfitLogRepository(dao, FakeClothingDao(), Dispatchers.Unconfined, imageDeleter = {}, appScope = this)
+
+            repository.updateOutfit(initial.entry.copy(surveyFeelingScore = 5), listOf(linkedPiece))
+            while (dao.modelStates.isEmpty()) {
+                yield()
+            }
+
             val model = dao.modelStates.lastOrNull()
             assertNotNull(model)
             assertEquals(1, model.sampleCount)
@@ -205,6 +260,7 @@ class OutfitLogRepositoryTest {
         minTempC: Double? = null,
         maxTempC: Double? = null,
         temperatureC: Double? = null,
+        pieces: List<ClothingPiece> = emptyList(),
     ) = OutfitEntryWithPieces(
         entry(createdAtEpochMs = createdAt).copy(
             id = id,
@@ -216,7 +272,7 @@ class OutfitLogRepositoryTest {
             maxTempC = maxTempC,
             temperatureC = temperatureC,
         ),
-        emptyList(),
+        pieces,
     )
 
     private fun piece(id: Long) =

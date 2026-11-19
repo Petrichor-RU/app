@@ -44,6 +44,7 @@ class FakeClothingDao : ClothingDao {
 
     override suspend fun update(clothing: ClothingPiece) {
         updated += clothing
+        this.clothing.value = this.clothing.value.map { if (it.id == clothing.id) clothing else it }
     }
 
     override suspend fun delete(clothing: ClothingPiece) {

@@ -1,5 +1,6 @@
 package nl.petrichor.app.data.recommendation
 
+import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitEntry
@@ -440,4 +441,60 @@ class RecommendationEngineTest {
         assertNotNull(result.firstOrNull { it.source == RecommendationSource.MODEL })
         assertNull(result.firstOrNull { it.source == RecommendationSource.FALLBACK })
     }
+
+    @Test
+    fun `selfie-only entry is excluded from trainingPoints while still competing in heuristic and model modes`() {
+        val selfieOnly = withPieces(entry(1, WarmthVerdict.PERFECT, tempC = 15.0, score = 5, photoPath = "selfie.jpg"), emptyList())
+        val tee = piece(1, teeType.id)
+        val jeans = piece(2, jeansType.id)
+        val testInput = input(pieces = listOf(tee, jeans), entries = listOf(selfieOnly), surveyedCount = 1, tempC = 15.0)
+
+        assertTrue(trainingPoints(testInput, typeById).isEmpty())
+        val heuristicResult = RecommendationEngine.recommendOutfits(testInput)
+        assertTrue(heuristicResult.any { it.loggedEntry?.entry?.id == 1L && it.selfiePath == "selfie.jpg" })
+
+        val modelState = ModelState(coefficientsJson = "[2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]", trainedAtEpochMs = now, sampleCount = 12)
+        val modelResult =
+            RecommendationEngine.recommendOutfits(
+                input(pieces = listOf(tee, jeans), entries = listOf(selfieOnly), surveyedCount = 12, modelState = modelState, tempC = 15.0),
+            )
+        val topLoggedId =
+            modelResult
+                .first()
+                .loggedEntry
+                ?.entry
+                ?.id
+        assertEquals(1L, topLoggedId)
+    }
+
+    @Test
+    fun `mismatched schemaVersion in ModelState falls back safely to heuristic mode`() {
+        val staleModel =
+            ModelState(
+                coefficientsJson = "[4.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]",
+                trainedAtEpochMs = now,
+                sampleCount = 12,
+                schemaVersion = ModelState.LEGACY_FEATURE_SCHEMA_VERSION + 1,
+            )
+        val tee = piece(1, teeType.id)
+        val jeans = piece(2, jeansType.id)
+        val logged = withPieces(entry(1, WarmthVerdict.PERFECT, tempC = 15.0, score = 5), listOf(tee, jeans))
+        val result =
+            RecommendationEngine.recommendOutfits(
+                input(pieces = listOf(tee, jeans), entries = listOf(logged), surveyedCount = 12, modelState = staleModel, tempC = 15.0),
+            )
+        assertTrue(result.all { it.source == RecommendationSource.HEURISTIC })
+    }
+
+    @Test
+    fun `recommendOutfitsSuspending matches recommendOutfits`() =
+        runTest {
+            val tee = piece(1, teeType.id)
+            val jacket = piece(2, jacketType.id, Material.WOOL)
+            val jeans = piece(3, jeansType.id)
+            val logged = withPieces(entry(1, WarmthVerdict.PERFECT, tempC = 12.0, score = 5), listOf(tee, jacket, jeans))
+            val testInput = input(pieces = listOf(tee, jacket, jeans), entries = listOf(logged), surveyedCount = 3, tempC = 12.0)
+
+            assertEquals(RecommendationEngine.recommendOutfits(testInput), RecommendationEngine.recommendOutfitsSuspending(testInput))
+        }
 }

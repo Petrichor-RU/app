@@ -14,6 +14,7 @@ import nl.petrichor.app.data.database.defaultOutfitDao
 import nl.petrichor.app.data.media.MediaStorage
 import nl.petrichor.app.data.outfit.OutfitDao
 import nl.petrichor.app.data.outfit.OutfitLogRepository
+import nl.petrichor.app.data.recommendation.RecommendationTrainingCoordinator
 import kotlin.time.Clock
 
 /** Outcome of [WardrobeRepository.deletePieceWithArchive]. */
@@ -26,13 +27,15 @@ enum class PieceDeleteResult {
 }
 
 /**
- * Repository for wardrobe operations
- * Handles data access and business logic
+ * Repository for wardrobe operations.
+ * Handles data access, business logic, and triggers retraining when warmth-relevant
+ * metadata changes on a garment linked to journal entries.
  */
 class WardrobeRepository(
     private val clothingDao: ClothingDao = defaultClothingDao(),
     private val outfitDao: OutfitDao = defaultOutfitDao(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val trainingCoordinator: RecommendationTrainingCoordinator? = null,
     private val imageDeleter: suspend (String) -> Unit = { path -> MediaStorage.deleteImage(path) },
 ) {
     // Get all clothing items (archived pieces are filtered out by the dao)
@@ -60,10 +63,16 @@ class WardrobeRepository(
             )
         }
 
-    // Update existing clothing item
+    // Update existing clothing item; retrain when warmth-relevant metadata changes on a worn piece (Gate A).
     suspend fun updateClothing(clothing: ClothingPiece) =
         withContext(ioDispatcher) {
+            val previous = clothingDao.getByIdIncludingArchived(clothing.id)
             clothingDao.update(clothing)
+            val warmthMetadataChanged =
+                previous != null && (previous.typeId != clothing.typeId || previous.material != clothing.material)
+            if (warmthMetadataChanged && outfitDao.getEntriesForPiece(clothing.id).isNotEmpty()) {
+                trainingCoordinator?.notifyDataChanged()
+            }
         }
 
     // Delete clothing item

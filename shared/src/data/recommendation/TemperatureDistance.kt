@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.recommendation
 
 import nl.petrichor.app.data.outfit.OutfitEntry
+import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.data.outfit.WarmthVerdict
 import nl.petrichor.app.data.wardrobe.ClothingType
 import kotlin.math.abs
@@ -11,6 +12,10 @@ const val TEMP_MARGIN_C = 5.0
 /** Penalty per degree beyond the margin for logged candidates worn at a different temperature. */
 private const val PENALTY_PER_DEGREE_C = 0.25
 
+/** Explicit guard: true only when the journal entry links to at least one wardrobe garment. */
+val OutfitEntryWithPieces.hasKnownPieces: Boolean
+    get() = pieces.isNotEmpty()
+
 /**
  * Built-in prior for the ideal warmth when the target temperature is far outside the surveyed
  * range: warmer days call for less warmth. Used instead of flat extrapolation, which would keep
@@ -18,7 +23,7 @@ private const val PENALTY_PER_DEGREE_C = 0.25
  */
 fun priorIdealWarmth(tempC: Double): Double = (3.6 - 0.12 * tempC).coerceIn(1.0, 5.0)
 
-/** Training points (temperature, warmth, verdict) from surveyed entries with weather data. */
+/** Training points (temperature, warmth, verdict) from surveyed entries with known garments and weather data. */
 internal fun trainingPoints(
     input: RecommendationInput,
     typeById: Map<Long, ClothingType>,
@@ -27,7 +32,7 @@ internal fun trainingPoints(
         val entry = entryWithPieces.entry
         val temp = entryTemperature(entry)
         val verdict = entry.surveyWarmthVerdict
-        if (temp != null && verdict != null) {
+        if (entryWithPieces.hasKnownPieces && temp != null && verdict != null) {
             Triple(temp, outfitWarmth(entryWithPieces.pieces, typeById), verdict)
         } else {
             null
@@ -45,7 +50,7 @@ fun entryTemperature(entry: OutfitEntry): Double? =
 
 /**
  * True when the target temperature is further than [TEMP_MARGIN_C] outside the range of
- * surveyed entries with weather data — there the learned ideal is unreliable.
+ * surveyed entries with known garments and weather data — there the learned ideal is unreliable.
  */
 fun isOutsideSurveyedRange(input: RecommendationInput): Boolean {
     val tempC = input.tempC

@@ -18,6 +18,7 @@ import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.data.outfit.OutfitLogRepository
 import nl.petrichor.app.data.outfit.WarmthVerdict
+import nl.petrichor.app.data.recommendation.SharedTrainingCoordinator
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.WardrobeRepository
@@ -31,8 +32,10 @@ import nl.petrichor.app.data.weather.WeatherSnapshot
  */
 @Suppress("TooGenericExceptionCaught") // repository failures are surfaced as snackbars, so any exception is handled
 class JournalViewModel(
-    private val repository: OutfitLogRepository = OutfitLogRepository(),
-    wardrobeRepository: WardrobeRepository = WardrobeRepository(),
+    private val repository: OutfitLogRepository =
+        OutfitLogRepository(trainingCoordinator = SharedTrainingCoordinator.instance),
+    wardrobeRepository: WardrobeRepository =
+        WardrobeRepository(trainingCoordinator = SharedTrainingCoordinator.instance),
     private val weatherRepository: WeatherRepository = WeatherRepository(),
     private val locationStore: SelectedLocationStore = SelectedLocationStore(),
 ) : ViewModel() {

@@ -1,6 +1,10 @@
 package nl.petrichor.app.ui.recommendation
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
@@ -9,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.v2.runDesktopComposeUiTest
@@ -20,6 +25,10 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
+import nl.petrichor.app.data.weather.Coordinates
+import nl.petrichor.app.data.weather.ForecastDay
+import nl.petrichor.app.data.weather.Place
+import nl.petrichor.app.data.weather.WeatherSnapshot
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -188,5 +197,85 @@ class RecommendationContentTest {
                 waitForIdle()
             }
             onNodeWithTag("calendar_top_bar").assertIsDisplayed()
+        }
+
+    private fun sampleWeather() =
+        WeatherSnapshot(
+            place = Place("Amsterdam", Coordinates(52.37, 4.90)),
+            temperature = 15,
+            feelsLike = 14,
+            description = "Clear",
+            icon = "01d",
+            humidity = 60,
+            windSpeed = 3,
+            forecast =
+                listOf(
+                    ForecastDay("2026-06-10", min = 10, max = 18, icon = "01d"),
+                    ForecastDay("2026-06-11", min = 14, max = 23, icon = "01d"),
+                ),
+        )
+
+    @Test
+    fun `selecting a forecast date updates selectedDate and LocationNote`() =
+        runDesktopComposeUiTest(width = 800, height = 600) {
+            val tomorrow = LocalDate(2026, 6, 11)
+            val weather = sampleWeather()
+            val selectedDates = mutableListOf<LocalDate>()
+            val candidates =
+                listOf(
+                    OutfitCandidate(
+                        null,
+                        listOf(piece(1, "Tee", 10), piece(2, "Jeans", 12), piece(5, "Cap", 14), piece(6, "Sneakers", 15)),
+                        null,
+                        null,
+                        RecommendationSource.HEURISTIC,
+                    ),
+                )
+            setContent {
+                var selectedDate by remember { mutableStateOf(today) }
+                MaterialSymbolsRenderingScope {
+                    MaterialTheme {
+                        RecommendationContent(
+                            uiState =
+                                RecommendationUiState(
+                                    locationName = "Amsterdam",
+                                    weather = weather,
+                                    today = today,
+                                    candidates = candidates,
+                                    clothingTypes = types,
+                                    laundryVersion = 0,
+                                    selectedDate = selectedDate,
+                                ),
+                            onDateSelected = {
+                                selectedDates += it
+                                selectedDate = it
+                            },
+                            onMarkPieceLaundry = { _, _ -> },
+                        )
+                    }
+                }
+            }
+            waitForIdle()
+            onNodeWithText("Amsterdam • 18° / 10°").assertIsDisplayed()
+
+            var swipes = 0
+            while (swipes < 20) {
+                val pagerTop =
+                    onAllNodesWithTag("calendar_pager")
+                        .fetchSemanticsNodes()
+                        .firstOrNull()
+                        ?.positionInRoot
+                        ?.y
+                if (pagerTop != null && pagerTop >= 30f) break
+                onNodeWithTag("recommendation_list").performTouchInput { swipe(center, center + Offset(0f, 30f)) }
+                waitForIdle()
+                swipes++
+            }
+            onNodeWithTag("calendar_pager").assertIsDisplayed()
+            onNodeWithText("11").performClick()
+            waitForIdle()
+
+            assertEquals(listOf(tomorrow), selectedDates)
+            onNodeWithText("Amsterdam • 23° / 14°").assertIsDisplayed()
         }
 }

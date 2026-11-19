@@ -37,6 +37,12 @@ data class OutfitEntry(
     // laundry (epoch ms until which this outfit is blocked; 0 = clean)
     val laundryUntilEpochMs: Long = 0,
     val createdAtEpochMs: Long = 0,
+    val windSpeedMs: Double? = null,
+    val humidity: Int? = null,
+    val precipitationProbability: Double? = null,
+    val rainVolumeMm: Double? = null,
+    val weatherCapturedAtEpochMs: Long? = null,
+    val locationName: String? = null,
 )
 
 @Entity(
@@ -85,4 +91,10 @@ data class ModelState(
     val coefficientsJson: String, // kotlinx-serialization List<Double>
     val trainedAtEpochMs: Long,
     val sampleCount: Int,
-)
+    val schemaVersion: Int = LEGACY_FEATURE_SCHEMA_VERSION,
+    val dataRevision: Long = 0L,
+) {
+    companion object {
+        const val LEGACY_FEATURE_SCHEMA_VERSION = 1
+    }
+}
