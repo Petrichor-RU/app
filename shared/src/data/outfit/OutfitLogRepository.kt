@@ -77,10 +77,16 @@ class OutfitLogRepository(
                     .takeUnless { it.createdAtEpochMs != 0L }
                     ?.copy(createdAtEpochMs = Clock.System.now().toEpochMilliseconds())
                     ?: entry
-            outfitDao.insertEntryWithPieces(
-                stamped,
-                pieces.mapIndexed { index, piece -> OutfitEntryPiece(entryId = 0, pieceId = piece.id, orderIndex = index) },
-            )
+            val entryId =
+                outfitDao.insertEntryWithPieces(
+                    stamped,
+                    pieces.mapIndexed { index, piece -> OutfitEntryPiece(entryId = 0, pieceId = piece.id, orderIndex = index) },
+                )
+            val latestUnlinked = outfitDao.getImpressionsForDate(stamped.wornOnDate).firstOrNull { it.wornEntryId == null }
+            if (latestUnlinked != null) {
+                outfitDao.linkImpressionWornEntry(latestUnlinked.id, entryId)
+            }
+            entryId
         }
 
     suspend fun updateOutfit(
@@ -102,10 +108,29 @@ class OutfitLogRepository(
         entryId: Long,
         score: Int,
         verdict: WarmthVerdict,
+        context: SurveyContextAnswers = SurveyContextAnswers(),
     ) = withContext(ioDispatcher) {
-        outfitDao.setSurvey(entryId, score, verdict, Clock.System.now().toEpochMilliseconds())
+        outfitDao.setSurvey(
+            entryId = entryId,
+            score = score,
+            verdict = verdict,
+            surveyedAtEpochMs = Clock.System.now().toEpochMilliseconds(),
+            mostlyIndoors = context.mostlyIndoors,
+            highActivity = context.highActivity,
+            gotWet = context.gotWet,
+        )
         coordinator.notifyDataChanged()
     }
+
+    suspend fun recordRecommendationImpression(impression: RecommendationImpression): Long =
+        withContext(ioDispatcher) {
+            outfitDao.insertRecommendationImpression(impression)
+        }
+
+    suspend fun getImpressionsForDate(targetDate: LocalDate): List<RecommendationImpression> =
+        withContext(ioDispatcher) {
+            outfitDao.getImpressionsForDate(targetDate)
+        }
 
     suspend fun markOutfitLaundry(
         entryId: Long,

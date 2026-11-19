@@ -143,6 +143,7 @@ internal object FeatureExtractor {
         windSpeedMs: Double? = null,
         precipitationProbability: Double? = null,
         rainVolumeMm: Double? = null,
+        rainExposureOverride: Double? = null,
     ): RawOutfitSignals =
         RawOutfitSignals(
             tempC = tempC,
@@ -154,7 +155,7 @@ internal object FeatureExtractor {
                     WarmthEncoding.zoneWarmth(pieces, typeById, CoverageZone.FEET),
             layerCountUpper = WarmthEncoding.layerCount(pieces, typeById, CoverageZone.UPPER).toDouble(),
             windExposure = computeWindExposure(windSpeedMs),
-            rainExposure = computeRainExposure(isRainy, precipitationProbability, rainVolumeMm),
+            rainExposure = rainExposureOverride ?: computeRainExposure(isRainy, precipitationProbability, rainVolumeMm),
             rainProtectionScore = maxShellProtection(pieces, typeById) { it.rainProtectionScore },
             windProtectionScore = maxShellProtection(pieces, typeById) { it.windProtectionScore },
         )

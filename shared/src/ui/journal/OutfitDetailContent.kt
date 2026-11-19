@@ -191,6 +191,19 @@ private fun SurveySection(
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
             )
+            val contextNotes =
+                listOfNotNull(
+                    entry.mostlyIndoors?.let { if (it) "Mostly indoors" else "Mostly outdoors" },
+                    entry.highActivity?.let { if (it) "High activity" else "Normal activity" },
+                    entry.gotWet?.let { if (it) "Got wet" else "Stayed dry" },
+                ).joinToString(" • ")
+            if (contextNotes.isNotEmpty()) {
+                Text(
+                    contextNotes,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             TextButton(onClick = onSurvey) {
                 Text("Edit survey")
             }

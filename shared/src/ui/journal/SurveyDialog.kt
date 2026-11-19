@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -26,24 +27,35 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
+import nl.petrichor.app.data.outfit.SurveyContextAnswers
+import nl.petrichor.app.data.outfit.SurveyContextQuestion
 import nl.petrichor.app.data.outfit.WarmthVerdict
 import kotlin.math.roundToInt
 
 /**
  * Evening survey: two required questions, feeling score 1-5 and warmth
- * verdict. Submit is disabled until both are answered. With [entry] == null the empty-state
- * variant is shown (20:00 deep link when nothing was logged today): "Log outfit first".
+ * verdict, plus at most one optional skippable context chip when [selectFollowUpQuestion]
+ * triggers. Submit is enabled once both required questions are answered.
  */
 @Composable
 fun SurveyDialog(
     entry: OutfitEntryWithPieces?,
     onDismiss: () -> Unit,
-    onSubmit: suspend (entryId: Long, score: Int, verdict: WarmthVerdict) -> Boolean,
+    onSubmit: suspend (entryId: Long, score: Int, verdict: WarmthVerdict, context: SurveyContextAnswers) -> Boolean,
     onLogOutfitFirst: () -> Unit,
+    selectFollowUpQuestion: (score: Int?, verdict: WarmthVerdict?) -> SurveyContextQuestion? = { _, _ -> null },
 ) {
-    var score by remember { mutableStateOf<Int?>(entry?.entry?.surveyFeelingScore) }
-    var verdict by remember { mutableStateOf<WarmthVerdict?>(entry?.entry?.surveyWarmthVerdict) }
+    val entryId = entry?.entry?.id
+    var score by remember(entryId) { mutableStateOf<Int?>(entry?.entry?.surveyFeelingScore) }
+    var verdict by remember(entryId) { mutableStateOf<WarmthVerdict?>(entry?.entry?.surveyWarmthVerdict) }
+    var contextAnswers by remember(entryId) { mutableStateOf(SurveyContextAnswers.fromEntry(entry?.entry)) }
     var isSubmitting by remember { mutableStateOf(false) }
+    val followUpQuestion =
+        if (entry != null) {
+            selectFollowUpQuestion(score, verdict)
+        } else {
+            null
+        }
 
     AlertDialog(
         onDismissRequest = { if (!isSubmitting) onDismiss() },
@@ -57,6 +69,11 @@ fun SurveyDialog(
                     onScoreChange = { score = it },
                     verdict = verdict,
                     onVerdictChange = { verdict = it },
+                    followUpQuestion = followUpQuestion,
+                    contextAnswers = contextAnswers,
+                    onContextToggle = { question, choice ->
+                        contextAnswers = contextAnswers.withToggle(question, choice)
+                    },
                 )
             }
         },
@@ -68,6 +85,7 @@ fun SurveyDialog(
                         SurveySubmitState(
                             score = score,
                             verdict = verdict,
+                            contextAnswers = contextAnswers,
                             isSubmitting = isSubmitting,
                             onSubmittingChange = { isSubmitting = it },
                             onSubmit = onSubmit,
@@ -94,12 +112,16 @@ private fun SurveyEmptyState(onLogOutfitFirst: () -> Unit) {
     }
 }
 
+@Suppress("LongParameterList") // compose form wires two required fields + optional follow-up state
 @Composable
 private fun SurveyForm(
     score: Int?,
     onScoreChange: (Int) -> Unit,
     verdict: WarmthVerdict?,
     onVerdictChange: (WarmthVerdict) -> Unit,
+    followUpQuestion: SurveyContextQuestion?,
+    contextAnswers: SurveyContextAnswers,
+    onContextToggle: (SurveyContextQuestion, Boolean) -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
@@ -112,6 +134,13 @@ private fun SurveyForm(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Was it too cold, perfect, or too warm?", style = MaterialTheme.typography.bodyMedium)
             VerdictRow(verdict = verdict, onVerdictChange = onVerdictChange)
+        }
+        if (followUpQuestion != null) {
+            FollowUpContextSection(
+                question = followUpQuestion,
+                selectedAnswer = contextAnswers.answerFor(followUpQuestion),
+                onToggle = { choice -> onContextToggle(followUpQuestion, choice) },
+            )
         }
     }
 }
@@ -167,13 +196,49 @@ private fun VerdictRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FollowUpContextSection(
+    question: SurveyContextQuestion,
+    selectedAnswer: Boolean?,
+    onToggle: (Boolean) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = question.prompt,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.testTag("survey_followup_prompt"),
+        )
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            FilterChip(
+                selected = selectedAnswer == true,
+                onClick = { onToggle(true) },
+                label = { Text(question.positiveLabel) },
+                modifier = Modifier.testTag("survey_followup_positive"),
+            )
+            FilterChip(
+                selected = selectedAnswer == false,
+                onClick = { onToggle(false) },
+                label = { Text(question.negativeLabel) },
+                modifier = Modifier.testTag("survey_followup_negative"),
+            )
+        }
+    }
+}
+
 /** Bundled submit state for [SurveySubmitButton]. */
-private class SurveySubmitState(
+private data class SurveySubmitState(
     val score: Int?,
     val verdict: WarmthVerdict?,
+    val contextAnswers: SurveyContextAnswers,
     val isSubmitting: Boolean,
     val onSubmittingChange: (Boolean) -> Unit,
-    val onSubmit: suspend (entryId: Long, score: Int, verdict: WarmthVerdict) -> Boolean,
+    val onSubmit: suspend (entryId: Long, score: Int, verdict: WarmthVerdict, context: SurveyContextAnswers) -> Boolean,
     val onDismiss: () -> Unit,
 )
 
@@ -190,7 +255,7 @@ private fun SurveySubmitButton(
             if (selectedScore != null && selectedVerdict != null) {
                 submit.onSubmittingChange(true)
                 coroutineScope.launch {
-                    val saved = submit.onSubmit(entry.entry.id, selectedScore, selectedVerdict)
+                    val saved = submit.onSubmit(entry.entry.id, selectedScore, selectedVerdict, submit.contextAnswers)
                     submit.onSubmittingChange(false)
                     if (saved) submit.onDismiss()
                 }

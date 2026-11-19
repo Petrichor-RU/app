@@ -14,9 +14,11 @@ import kotlinx.coroutines.withContext
 import nl.petrichor.app.data.location.SelectedLocationStore
 import nl.petrichor.app.data.location.currentPlace
 import nl.petrichor.app.data.media.MediaStorage
+import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.data.outfit.OutfitLogRepository
+import nl.petrichor.app.data.outfit.SurveyContextAnswers
 import nl.petrichor.app.data.outfit.WarmthVerdict
 import nl.petrichor.app.data.recommendation.SharedTrainingCoordinator
 import nl.petrichor.app.data.wardrobe.ClothingPiece
@@ -40,6 +42,7 @@ class JournalViewModel(
     private val locationStore: SelectedLocationStore = SelectedLocationStore(),
 ) : ViewModel() {
     val entries: Flow<List<OutfitEntryWithPieces>> = repository.entries
+    val modelState: Flow<ModelState?> = repository.modelState
     val wardrobePieces: Flow<List<ClothingPiece>> = wardrobeRepository.getAllClothing()
     val clothingTypes: Flow<List<ClothingType>> = wardrobeRepository.getClothingTypes()
     val laundryVersion: Flow<Int> =
@@ -95,9 +98,10 @@ class JournalViewModel(
         entryId: Long,
         score: Int,
         verdict: WarmthVerdict,
+        context: SurveyContextAnswers = SurveyContextAnswers(),
     ): Boolean =
         try {
-            repository.saveSurvey(entryId, score, verdict)
+            repository.saveSurvey(entryId, score, verdict, context)
             showSnackbar("Survey saved!")
             true
         } catch (exception: CancellationException) {

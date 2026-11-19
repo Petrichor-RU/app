@@ -11,6 +11,8 @@ class FakeOutfitDao : OutfitDao {
     val entries = MutableStateFlow<List<OutfitEntryWithPieces>>(emptyList())
     val modelStates = mutableListOf<ModelState>()
     private val modelStateFlow = MutableStateFlow<ModelState?>(null)
+    val impressions = mutableListOf<RecommendationImpression>()
+    var nextImpressionId = 1L
     val insertedEntries = mutableListOf<OutfitEntry>()
     val insertedLinks = mutableListOf<List<OutfitEntryPiece>>()
     val updatedEntries = mutableListOf<OutfitEntry>()
@@ -86,6 +88,9 @@ class FakeOutfitDao : OutfitDao {
         score: Int,
         verdict: WarmthVerdict,
         surveyedAtEpochMs: Long,
+        mostlyIndoors: Boolean?,
+        highActivity: Boolean?,
+        gotWet: Boolean?,
     ) {
         surveys += Triple(entryId, score, verdict)
         entries.value =
@@ -97,6 +102,9 @@ class FakeOutfitDao : OutfitDao {
                                 surveyFeelingScore = score,
                                 surveyWarmthVerdict = verdict,
                                 surveyedAtEpochMs = surveyedAtEpochMs,
+                                mostlyIndoors = mostlyIndoors,
+                                highActivity = highActivity,
+                                gotWet = gotWet,
                             ),
                     )
                 } else {
@@ -129,5 +137,27 @@ class FakeOutfitDao : OutfitDao {
     override suspend fun deleteModelState() {
         modelStates.clear()
         modelStateFlow.value = null
+    }
+
+    override suspend fun insertRecommendationImpression(impression: RecommendationImpression): Long {
+        val assignedId = if (impression.id == 0L) nextImpressionId++ else impression.id
+        impressions += impression.copy(id = assignedId)
+        return assignedId
+    }
+
+    override suspend fun getImpressionsForDate(targetDate: LocalDate): List<RecommendationImpression> =
+        impressions
+            .filter { it.targetDate == targetDate }
+            .sortedWith(compareByDescending<RecommendationImpression> { it.shownAtEpochMs }.thenByDescending { it.id })
+
+    override suspend fun linkImpressionWornEntry(
+        impressionId: Long,
+        entryId: Long,
+    ) {
+        for (i in impressions.indices) {
+            if (impressions[i].id == impressionId) {
+                impressions[i] = impressions[i].copy(wornEntryId = entryId)
+            }
+        }
     }
 }

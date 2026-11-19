@@ -39,6 +39,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.data.outfit.buildEntryWeatherSnapshot
+import nl.petrichor.app.data.recommendation.ActiveQuerySelector
+import nl.petrichor.app.data.recommendation.DecodedModel
 import nl.petrichor.app.platform.BackHandler
 import nl.petrichor.app.ui.BoxMessage
 import kotlin.time.Clock
@@ -64,6 +66,8 @@ fun JournalScreen(
     val entries by viewModel.entries.collectAsStateWithLifecycle(emptyList())
     val wardrobePieces by viewModel.wardrobePieces.collectAsStateWithLifecycle(emptyList())
     val clothingTypes by viewModel.clothingTypes.collectAsStateWithLifecycle(emptyList())
+    val modelState by viewModel.modelState.collectAsStateWithLifecycle(null)
+    val decodedModel = remember(modelState) { DecodedModel.decode(modelState) }
     val today = remember { Clock.System.todayIn(TimeZone.currentSystemDefault()) }
 
     var showAddDialog by remember { mutableStateOf(false) }
@@ -235,14 +239,15 @@ fun JournalScreen(
         }
 
         if (showSurvey) {
+            val activeTarget = if (surveyEmptyState) null else surveyTarget
             SurveyDialog(
-                entry = if (surveyEmptyState) null else surveyTarget,
+                entry = activeTarget,
                 onDismiss = {
                     showSurvey = false
                     consumeActionIfPending()
                 },
-                onSubmit = { entryId, score, verdict ->
-                    viewModel.saveSurvey(entryId, score, verdict)
+                onSubmit = { entryId, score, verdict, context ->
+                    viewModel.saveSurvey(entryId, score, verdict, context)
                 },
                 onLogOutfitFirst = {
                     showSurvey = false
@@ -250,6 +255,18 @@ fun JournalScreen(
                     editingOutfit = null
                     showAddDialog = true
                     consumeActionIfPending()
+                },
+                selectFollowUpQuestion = { score, verdict ->
+                    activeTarget?.let { target ->
+                        ActiveQuerySelector.selectFollowUpQuestion(
+                            item = target,
+                            model = decodedModel,
+                            clothingTypes = clothingTypes,
+                            historyEntries = entries,
+                            candidateScore = score,
+                            candidateVerdict = verdict,
+                        )
+                    }
                 },
             )
         }

@@ -6,6 +6,9 @@ internal const val WIND_EXPOSURE_SCALE_MS = 10.0
 internal const val MAX_WIND_EXPOSURE = 1.5
 internal const val RAINY_FLAG_BASE_EXPOSURE = 0.6
 internal const val RAIN_VOLUME_SCALE_MM = 5.0
+private const val GOT_WET_MIN_EXPOSURE = 0.85
+private const val INDOOR_OBSERVATION_WEIGHT = 0.35
+private const val HIGH_ACTIVITY_OBSERVATION_WEIGHT = 0.50
 
 /**
  * Normalised wind exposure shared identically between training snapshots ([OutfitEntry]) and
@@ -42,6 +45,29 @@ internal fun computeRainExposure(
             0.0
         }
     return maxOf(flagPart, popPart, volPart)
+}
+
+/**
+ * Resolves effective wet exposure during training: when the wearer explicitly answered `gotWet`,
+ * dry trips under forecast rain decouple to `0.0` while confirmed wet trips reach at least
+ * `0.85` even if forecast precipitation looked modest.
+ */
+internal fun effectiveTrainingRainExposure(entry: OutfitEntry): Double =
+    when (entry.gotWet) {
+        true -> maxOf(entry.rainExposure, GOT_WET_MIN_EXPOSURE)
+        false -> 0.0
+        null -> entry.rainExposure
+    }
+
+/**
+ * Down-weights indoor or unusually active observations during training by scaling observation
+ * variance (`R_eff = R / weight`), preventing atypical days from skewing outdoor comfort estimates.
+ */
+internal fun contextObservationWeight(entry: OutfitEntry): Double {
+    var weight = 1.0
+    if (entry.mostlyIndoors == true) weight *= INDOOR_OBSERVATION_WEIGHT
+    if (entry.highActivity == true) weight *= HIGH_ACTIVITY_OBSERVATION_WEIGHT
+    return weight
 }
 
 internal val DayWeather.windExposure: Double

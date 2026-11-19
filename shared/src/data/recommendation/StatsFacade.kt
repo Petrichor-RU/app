@@ -10,6 +10,8 @@ import org.jetbrains.kotlinx.multik.ndarray.data.get
 import org.jetbrains.kotlinx.multik.ndarray.data.set
 import org.oremif.kstats.descriptive.OnlineStatistics
 import org.oremif.kstats.distributions.NormalDistribution
+import kotlin.math.sqrt
+import kotlin.random.Random
 
 /**
  * Thin internal adapter isolating `kstats` and `multik-kotlin` numerical primitives behind
@@ -23,6 +25,11 @@ internal object StatsFacade {
     fun standardNormalPdf(z: Double): Double = standardNormal.pdf(z)
 
     fun standardNormalCdf(z: Double): Double = standardNormal.cdf(z)
+
+    fun sampleStandardNormal(
+        dimension: Int,
+        random: Random,
+    ): DoubleArray = standardNormal.sample(dimension, random)
 
     /**
      * Computes sample mean and standard deviation using `kstats` [OnlineStatistics].
@@ -147,5 +154,59 @@ internal object MultikOps {
             }
         }
         return result
+    }
+
+    /**
+     * Computes a lower-triangular Cholesky factor `L` with `L * L^T ~ matrix` for symmetric
+     * covariance matrices, adding a tiny floor on non-positive pivots for numerical safety.
+     */
+    fun choleskyLower(
+        matrix: D2Array<Double>,
+        minPivot: Double = 1e-8,
+    ): D2Array<Double> {
+        val size = matrix.shape[0]
+        val lower = mk.zeros<Double>(size, size)
+        for (i in 0 until size) {
+            for (j in 0..i) {
+                lower[i, j] = computeCholeskyEntry(matrix, lower, i, j, minPivot)
+            }
+        }
+        return lower
+    }
+
+    private fun computeCholeskyEntry(
+        matrix: D2Array<Double>,
+        lower: D2Array<Double>,
+        i: Int,
+        j: Int,
+        minPivot: Double,
+    ): Double {
+        var sum = matrix[i, j]
+        for (k in 0 until j) {
+            sum -= lower[i, k] * lower[j, k]
+        }
+        return if (i == j) {
+            val safePivot = if (sum.isFinite() && sum >= minPivot) sum else minPivot
+            sqrt(safePivot)
+        } else {
+            val diag = lower[j, j]
+            if (diag > 0.0 && sum.isFinite()) sum / diag else 0.0
+        }
+    }
+
+    fun samplePosteriorVector(
+        mean: D1Array<Double>,
+        lowerCholesky: D2Array<Double>,
+        random: Random,
+    ): DoubleArray {
+        val d = mean.size
+        val z = StatsFacade.sampleStandardNormal(d, random)
+        return DoubleArray(d) { i ->
+            var value = mean[i]
+            for (j in 0..i) {
+                value += lowerCholesky[i, j] * z[j]
+            }
+            value
+        }
     }
 }

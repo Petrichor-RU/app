@@ -64,24 +64,10 @@ internal data class RecommendationScoringContext(
     val decodedModel: DecodedModel?,
 )
 
-private sealed interface CandidateDedupKey {
-    data class PieceSet(
-        val sortedPieceIds: List<Long>,
-    ) : CandidateDedupKey
-
-    data class SelfieOnly(
-        val entryId: Long,
-    ) : CandidateDedupKey
-
-    data class SuggestionOnly(
-        val text: String?,
-    ) : CandidateDedupKey
-}
-
 /**
- * Zone-based recommendation engine: builds candidates from logged outfits
- * (with laundry replacements) and constructed combinations, scores them with the active mode
- * and returns the top few.
+ * Zone-based recommendation engine: builds candidates from logged outfits (with score-driven
+ * laundry replacements) and layered constructed combinations, scores them with the active mode
+ * using a single pre-decoded model snapshot, and delegates slate selection to [ExplorationPolicy].
  */
 object RecommendationEngine {
     const val MAX_CANDIDATES = 3
@@ -101,30 +87,34 @@ object RecommendationEngine {
             else -> RecommendationMode.FALLBACK
         }
 
-    fun recommendOutfits(input: RecommendationInput): List<OutfitCandidate> {
+    fun recommendOutfits(input: RecommendationInput): List<OutfitCandidate> = recommendSlate(input).candidates
+
+    /**
+     * Returns both the top-3 [OutfitCandidate]s and their per-slot metadata/propensities for
+     * session-stable impression logging.
+     */
+    fun recommendSlate(input: RecommendationInput): RankedSlate {
         val context = prepareContext(input)
         val candidates = CandidateGenerator.generate(context)
-        val scored =
-            candidates.map { candidate ->
-                candidate to Scoring.scoreCandidate(input, candidate, context.typeById, context.mode, context.decodedModel)
-            }
-        return rankAndDeduplicate(scored)
+        val evaluated = candidates.map { candidate -> evaluateCandidate(context, candidate) }
+        return ExplorationPolicy.rankAndSelectSlate(context, evaluated)
     }
 
     /**
      * Suspending entry point for UI/background ranking: yields every [SCORING_YIELD_INTERVAL]
      * candidates so single-threaded runtimes such as `wasmJs` never stall UI frames.
      */
-    suspend fun recommendOutfitsSuspending(input: RecommendationInput): List<OutfitCandidate> {
+    suspend fun recommendOutfitsSuspending(input: RecommendationInput): List<OutfitCandidate> = recommendSlateSuspending(input).candidates
+
+    suspend fun recommendSlateSuspending(input: RecommendationInput): RankedSlate {
         val context = prepareContext(input)
         val candidates = CandidateGenerator.generate(context)
-        val scored = ArrayList<Pair<OutfitCandidate, Double>>(candidates.size)
+        val evaluated = ArrayList<EvaluatedCandidate>(candidates.size)
         candidates.forEachIndexed { index, candidate ->
             if (index > 0 && index % SCORING_YIELD_INTERVAL == 0) yield()
-            val score = Scoring.scoreCandidate(input, candidate, context.typeById, context.mode, context.decodedModel)
-            scored += candidate to score
+            evaluated += evaluateCandidate(context, candidate)
         }
-        return rankAndDeduplicate(scored)
+        return ExplorationPolicy.rankAndSelectSlate(context, evaluated)
     }
 
     private fun prepareContext(input: RecommendationInput): RecommendationScoringContext {
@@ -140,34 +130,67 @@ object RecommendationEngine {
         return RecommendationScoringContext(input, pool, typeById, mode, decodedModel)
     }
 
-    private fun rankAndDeduplicate(scored: List<Pair<OutfitCandidate, Double>>): List<OutfitCandidate> =
-        scored
-            .sortedWith(CANDIDATE_RANK_ORDER)
-            .distinctBy { (candidate, _) -> dedupKey(candidate) }
-            .take(MAX_CANDIDATES)
-            .map { it.first }
+    private fun evaluateCandidate(
+        context: RecommendationScoringContext,
+        candidate: OutfitCandidate,
+    ): EvaluatedCandidate {
+        val input = context.input
+        val model = context.decodedModel
+        val tempC = input.tempC
+        val isSelfieOnly = candidate.pieces.isEmpty() && candidate.loggedEntry != null
+        val penalty = temperaturePenalty(candidate, tempC)
+        val useTrainedModel = model != null && tempC != null && !isSelfieOnly
 
-    private val CANDIDATE_RANK_ORDER =
-        Comparator<Pair<OutfitCandidate, Double>> { left, right ->
-            val scoreCmp = right.second.compareTo(left.second)
-            if (scoreCmp != 0) return@Comparator scoreCmp
-            val loggedCmp = (left.first.loggedEntry == null).compareTo(right.first.loggedEntry == null)
-            if (loggedCmp != 0) return@Comparator loggedCmp
-            val leftEntry = left.first.loggedEntry?.entry
-            val rightEntry = right.first.loggedEntry?.entry
-            val surveyCmp = (rightEntry?.surveyFeelingScore ?: Int.MIN_VALUE).compareTo(leftEntry?.surveyFeelingScore ?: Int.MIN_VALUE)
-            if (surveyCmp != 0) return@Comparator surveyCmp
-            val dateCmp = compareValues(rightEntry?.wornOnDate, leftEntry?.wornOnDate)
-            if (dateCmp != 0) return@Comparator dateCmp
-            (rightEntry?.createdAtEpochMs ?: Long.MIN_VALUE).compareTo(leftEntry?.createdAtEpochMs ?: Long.MIN_VALUE)
+        if (useTrainedModel && context.mode != RecommendationMode.FALLBACK) {
+            val raw =
+                FeatureExtractor.extractRaw(
+                    tempC = tempC,
+                    isRainy = input.isRainy,
+                    pieces = candidate.pieces,
+                    typeById = context.typeById,
+                    windSpeedMs = input.windSpeedMs,
+                    precipitationProbability = input.precipitationProbability,
+                    rainVolumeMm = input.rainVolumeMm,
+                )
+            val features = FeatureExtractor.buildFeatures(raw, model.scaler, candidate.pieces, model.activePieceIndexById)
+            val unseenPieceIds =
+                candidate.pieces
+                    .asSequence()
+                    .map { it.id }
+                    .distinct()
+                    .filter { it !in model.activePieceIndexById }
+                    .toList()
+            val comfort =
+                BayesianComfortModel.predict(
+                    ratingPosterior = model.ratingPosterior,
+                    thermalPosterior = model.thermalPosterior,
+                    raw = raw,
+                    features = features,
+                    unseenPieceCount = unseenPieceIds.size,
+                )
+            val baseScore = if (input.surveyedCount >= 1) comfort.rating.mean - penalty else 0.0 - penalty
+            return EvaluatedCandidate(
+                candidate = candidate,
+                baseScore = baseScore,
+                tempPenalty = penalty,
+                raw = raw,
+                features = features,
+                unseenPieceIds = unseenPieceIds,
+                comfort = comfort,
+            )
         }
 
-    private fun dedupKey(candidate: OutfitCandidate): CandidateDedupKey =
-        when {
-            candidate.pieces.isNotEmpty() -> CandidateDedupKey.PieceSet(candidate.pieces.map { it.id }.sorted())
-            candidate.loggedEntry != null -> CandidateDedupKey.SelfieOnly(candidate.loggedEntry.entry.id)
-            else -> CandidateDedupKey.SuggestionOnly(candidate.generalSuggestion)
-        }
+        val score = Scoring.scoreCandidate(input, candidate, context.typeById, context.mode, model)
+        return EvaluatedCandidate(
+            candidate = candidate,
+            baseScore = score,
+            tempPenalty = penalty,
+            raw = null,
+            features = null,
+            unseenPieceIds = emptyList(),
+            comfort = null,
+        )
+    }
 
     /**
      * Display groups for a candidate's pieces in fixed order; a full-body piece suppresses the

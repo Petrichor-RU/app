@@ -43,6 +43,9 @@ data class OutfitEntry(
     val rainVolumeMm: Double? = null,
     val weatherCapturedAtEpochMs: Long? = null,
     val locationName: String? = null,
+    val mostlyIndoors: Boolean? = null,
+    val highActivity: Boolean? = null,
+    val gotWet: Boolean? = null,
 )
 
 @Entity(
@@ -98,3 +101,27 @@ data class ModelState(
         const val CURRENT_SCHEMA_VERSION = 4
     }
 }
+
+/**
+ * Logged recommendation slate (top-3 candidates, predicted probabilities, epistemic uncertainties,
+ * and exploration propensities) used for unbiased offline IPS evaluation. Unchosen suggestions never
+ * produce negative posterior updates.
+ */
+@Entity(
+    tableName = "recommendation_impressions",
+    indices = [Index("targetDate"), Index("wornEntryId")],
+)
+data class RecommendationImpression(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val shownAtEpochMs: Long,
+    val targetDate: LocalDate,
+    val locationName: String?,
+    val tempC: Double?,
+    val isRainy: Boolean,
+    val windSpeedMs: Double?,
+    val modelSchemaVersion: Int,
+    val modelDataRevision: Long,
+    val policyName: String,
+    val candidatesJson: String,
+    val wornEntryId: Long? = null,
+)

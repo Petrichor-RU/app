@@ -102,13 +102,15 @@ internal object BayesianThermalModel {
         raw: RawOutfitSignals,
         features: DoubleArray,
         verdict: WarmthVerdict,
+        observationVariance: Double = 1.0,
     ): ThermalPosterior {
         val d = posterior.dimension
         require(features.size == d) { "Feature dimension ${features.size} != posterior dimension $d" }
 
+        val noiseVariance = observationVariance.coerceAtLeast(1.0)
         val x = mk.ndarray(features)
         val pX = StatsFacade.matVec(posterior.covariance, x)
-        val sSquared = (1.0 + StatsFacade.dot(x, pX)).coerceAtLeast(1.0)
+        val sSquared = (noiseVariance + StatsFacade.dot(x, pX)).coerceAtLeast(noiseVariance)
         val s = sqrt(sSquared)
         val mu = priorSensation(raw) + StatsFacade.dot(x, posterior.mean)
 
