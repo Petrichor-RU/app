@@ -16,41 +16,43 @@ import kotlin.test.Test
 class LocationHeaderTest {
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `header shows the location and toggles the picker`() = runDesktopComposeUiTest {
-        var pickerOpen by mutableStateOf(false)
-        setContent {
-            MaterialSymbolsRenderingScope {
-                MaterialTheme {
-                    LocationHeader(
-                        locationName = "Amsterdam",
-                        pickerOpen = pickerOpen,
-                        onTogglePicker = { pickerOpen = !pickerOpen }
-                    )
+    fun `header shows the location and toggles the picker`() =
+        runDesktopComposeUiTest {
+            var pickerOpen by mutableStateOf(false)
+            setContent {
+                MaterialSymbolsRenderingScope {
+                    MaterialTheme {
+                        LocationHeader(
+                            locationName = "Amsterdam",
+                            pickerOpen = pickerOpen,
+                            onTogglePicker = { pickerOpen = !pickerOpen },
+                        )
+                    }
                 }
             }
-        }
 
-        onNodeWithText("Amsterdam").assertIsDisplayed()
-        onNodeWithContentDescription("Search locations").performClick()
-        waitForIdle()
-        onNodeWithContentDescription("Close location picker").assertIsDisplayed()
-    }
+            onNodeWithText("Amsterdam").assertIsDisplayed()
+            onNodeWithContentDescription("Search locations").performClick()
+            waitForIdle()
+            onNodeWithContentDescription("Close location picker").assertIsDisplayed()
+        }
 
     @Test
     @OptIn(ExperimentalTestApi::class)
-    fun `header animates to a newly selected location`() = runDesktopComposeUiTest {
-        var locationName by mutableStateOf("Amsterdam")
-        setContent {
-            MaterialSymbolsRenderingScope {
-                MaterialTheme {
-                    LocationHeader(locationName = locationName, pickerOpen = false, onTogglePicker = {})
+    fun `header animates to a newly selected location`() =
+        runDesktopComposeUiTest {
+            var locationName by mutableStateOf("Amsterdam")
+            setContent {
+                MaterialSymbolsRenderingScope {
+                    MaterialTheme {
+                        LocationHeader(locationName = locationName, pickerOpen = false, onTogglePicker = {})
+                    }
                 }
             }
+
+            locationName = "Groningen"
+            waitForIdle()
+
+            onNodeWithText("Groningen").assertIsDisplayed()
         }
-
-        locationName = "Groningen"
-        waitForIdle()
-
-        onNodeWithText("Groningen").assertIsDisplayed()
-    }
 }

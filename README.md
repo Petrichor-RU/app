@@ -48,10 +48,21 @@ must send the same headers for the application and its worker assets.
 
 Run the project's tests with `./kotlin test`, or `./kotlin test -m <module>` for a single module.
 
+### Troubleshooting
+
+If the desktop app crashes at startup with a `NoSuchMethodError` on
+`org.jetbrains.skiko.SkiaLayer` (typically while Compose Hot Reload is enabled), the dependency
+resolver served a stale Skiko version: Compose 1.12.x needs `skiko-awt` 0.150.x, and a cached
+resolution of a newer one (e.g. 0.156.x) removes that constructor. Run `./kotlin clean` once to
+force re-resolution (use `./kotlin clean-shared-caches` if it persists), then check with
+`./kotlin show dependencies -m desktopApp` that `skiko-awt` resolves to 0.150.x.
+
 ## Weather API setup
 
-Petrichor uses OpenWeather for current conditions and the five-day forecast. Add your key to
-`WeatherConfig.openWeatherApiKey` in `shared/src/data/weather/WeatherRepository.kt`.
+Petrichor uses OpenWeather for current conditions, the five-day forecast and location search.
+`shared/src/AppConfig.kt` is git-ignored so the key is never committed: copy
+`shared/src/AppConfig.kt.template` to `shared/src/AppConfig.kt` and set
+`AppConfig.OPENWEATHER_API_KEY` to your key.
 
 ---
 

@@ -18,11 +18,12 @@ internal fun LocationNote(
     locationName: String,
     dayWeather: DayWeather,
 ) {
-    val tempSuffix = if (dayWeather.maxTemperature != null && dayWeather.minTemperature != null) {
-        " • ${dayWeather.maxTemperature}° / ${dayWeather.minTemperature}°"
-    } else {
-        ""
-    }
+    val tempSuffix =
+        if (dayWeather.maxTemperature != null && dayWeather.minTemperature != null) {
+            " • ${dayWeather.maxTemperature}° / ${dayWeather.minTemperature}°"
+        } else {
+            ""
+        }
     Row(verticalAlignment = Alignment.CenterVertically) {
         MaterialSymbol(
             iconName = MaterialSymbols.LOCATION_ON,
@@ -31,7 +32,7 @@ internal fun LocationNote(
         )
         Spacer(Modifier.width(4.dp))
         Text(
-            text = "Based on $locationName$tempSuffix",
+            text = "$locationName$tempSuffix",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

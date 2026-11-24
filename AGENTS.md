@@ -5,6 +5,9 @@
 - Do not create additional `MaterialSymbolsRenderingScope` instances in other files or composables.
 - Prefer updating the existing app-level scope in `App.kt` instead of introducing duplicate scopes elsewhere.
 - Keep changes focused and avoid unrelated refactors.
+- Use British English
+- Commit messages have a header, a line break, and a body. The header should be a single line of at most 56 characters. The body can have multiple lines, each of at most 72 characters.
+- Do not commit anything unless specifically instructed to do so
 
 For the clothing detail screen:
 - State should be remember. If I open a detail view, switch tabs, and go back, the detail view should still be open
@@ -22,9 +25,9 @@ For the wardrobe feature:
 
 For the weather feature UI:
 - `WeatherScreen` renders the main weather screen which shows the weather for the picked location.
-- `WeatherContent` renders the weather information for the main weather screen.
+- `WeatherContent` (private, inside `WeatherScreen.kt`) renders the weather information for the main weather screen.
 - `LocationPicker` renders the location picker UI from which the user can search new locations or pick one of the saved locations to see the weather for.
-- `LocationPickerViewModel` handles actions for search box, adding or removing the saved locations and moving the saved locations.
+- `LocationPickerController` handles actions for search box, adding or removing the saved locations and moving the saved locations.
 - `LocationHeader` renders the area which shows the current location and which the user can press to choose a different location.
 - `LocationListItem` handles the rendering for a location item which the user can select or which the user can save or delete.
 

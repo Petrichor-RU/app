@@ -1,0 +1,11 @@
+package nl.petrichor.app
+
+/**
+ * Template for the git-ignored AppConfig.kt: copy this file to AppConfig.kt (same directory)
+ * and fill in your OpenWeather API key (https://openweathermap.org/api). AppConfig.kt is
+ * git-ignored, so the real key is never committed.
+ */
+object AppConfig {
+    const val OPENWEATHER_API_KEY = ""
+    const val OPENWEATHER_API_BASE: String = "https://api.openweathermap.org"
+}
