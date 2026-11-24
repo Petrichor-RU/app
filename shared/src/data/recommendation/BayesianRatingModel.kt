@@ -2,6 +2,7 @@ package nl.petrichor.app.data.recommendation
 
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
+import org.jetbrains.kotlinx.multik.api.linalg.dot
 import org.jetbrains.kotlinx.multik.api.mk
 import org.jetbrains.kotlinx.multik.api.ndarray
 import org.jetbrains.kotlinx.multik.api.zeros
@@ -9,6 +10,7 @@ import org.jetbrains.kotlinx.multik.ndarray.data.D1Array
 import org.jetbrains.kotlinx.multik.ndarray.data.D2Array
 import org.jetbrains.kotlinx.multik.ndarray.data.get
 import org.jetbrains.kotlinx.multik.ndarray.data.set
+import kotlin.math.abs
 import kotlin.math.min
 import kotlin.math.sqrt
 
@@ -33,15 +35,37 @@ internal data class BayesianRatingStep(
     val deltaDays: Double = 0.0,
 )
 
+private const val FIRST_INTERACTION_INDEX = 7
+private const val LAST_CORE_INTERACTION_INDEX = 9
+
+@Suppress("LongParameterList") // maps schema v3 feature blocks to their diagonal prior variances
+internal fun buildPriorVariances(
+    dimension: Int,
+    offsetVariance: Double,
+    linearVariance: Double,
+    interactionVariance: Double,
+    conditionVariance: Double,
+    garmentVariance: Double,
+): DoubleArray =
+    DoubleArray(dimension) { index ->
+        when {
+            index == 0 -> offsetVariance
+            index < FIRST_INTERACTION_INDEX -> linearVariance
+            index <= LAST_CORE_INTERACTION_INDEX -> interactionVariance
+            index < FeatureExtractor.CORE_FEATURE_COUNT -> conditionVariance
+            else -> garmentVariance
+        }
+    }
+
 /**
  * Recursive Bayesian linear rating model using Joseph-form Kalman filter updates on Multik
  * arrays.
  *
- * Models residuals around [RidgeRatingModel.priorPrediction] with diagonal prior covariance:
- * wide on personal offset (`0`), moderate on linear (`1..6`) and condition/protection (`10..13`)
- * effects, narrower on interactions (`7..9`), and strongly shrunk on active per-garment dry
- * residuals (`14+`) with variance [GARMENT_PRIOR_VARIANCE]. Unseen or rarely worn pieces inherit
- * zero residual mean while retaining [GARMENT_PRIOR_VARIANCE] epistemic variance per piece.
+ * Models residuals around [priorPrediction] with diagonal prior covariance: wide on personal
+ * offset (`0`), moderate on linear (`1..6`) and condition/protection (`10..13`) effects, narrower
+ * on interactions (`7..9`), and strongly shrunk on active per-garment dry residuals (`14+`) with
+ * variance [GARMENT_PRIOR_VARIANCE]. Unseen or rarely worn pieces inherit zero residual mean while
+ * retaining [GARMENT_PRIOR_VARIANCE] epistemic variance per piece.
  */
 internal object BayesianRatingModel {
     const val DEFAULT_OBSERVATION_VARIANCE = 0.64
@@ -52,19 +76,21 @@ internal object BayesianRatingModel {
     private const val INTERACTION_PRIOR_VARIANCE = 0.4
     private const val CONDITION_PRIOR_VARIANCE = 0.8
     private const val MIN_VARIANCE = 1e-9
-    private const val FIRST_INTERACTION_INDEX = 7
-    private const val LAST_CORE_INTERACTION_INDEX = 9
+
+    fun priorPrediction(raw: RawOutfitSignals): Double {
+        val ideal = priorIdealWarmth(raw.tempC, raw.isRainy)
+        return (5.0 - min(4.0, abs(raw.totalWarmth - ideal))).coerceIn(1.0, 5.0)
+    }
 
     fun defaultPriorVariances(dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT): DoubleArray =
-        DoubleArray(dimension) { index ->
-            when {
-                index == 0 -> OFFSET_PRIOR_VARIANCE
-                index < FIRST_INTERACTION_INDEX -> LINEAR_PRIOR_VARIANCE
-                index <= LAST_CORE_INTERACTION_INDEX -> INTERACTION_PRIOR_VARIANCE
-                index < FeatureExtractor.CORE_FEATURE_COUNT -> CONDITION_PRIOR_VARIANCE
-                else -> GARMENT_PRIOR_VARIANCE
-            }
-        }
+        buildPriorVariances(
+            dimension = dimension,
+            offsetVariance = OFFSET_PRIOR_VARIANCE,
+            linearVariance = LINEAR_PRIOR_VARIANCE,
+            interactionVariance = INTERACTION_PRIOR_VARIANCE,
+            conditionVariance = CONDITION_PRIOR_VARIANCE,
+            garmentVariance = GARMENT_PRIOR_VARIANCE,
+        )
 
     fun prior(
         dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT,
@@ -75,7 +101,7 @@ internal object BayesianRatingModel {
         }
         return RatingPosterior(
             mean = mk.zeros<Double>(dimension),
-            covariance = MultikOps.diagonalMatrix(priorVariances),
+            covariance = StatsFacade.diagonalMatrix(priorVariances),
         )
     }
 
@@ -98,11 +124,11 @@ internal object BayesianRatingModel {
         }
 
         val x = mk.ndarray(features)
-        val pX = StatsFacade.matVec(predictedCov, x)
-        val epistemicVar = StatsFacade.dot(x, pX).coerceAtLeast(0.0)
+        val pX = mk.linalg.dot(predictedCov, x)
+        val epistemicVar = mk.linalg.dot(x, pX).coerceAtLeast(0.0)
         val innovationVar = (observationVariance + epistemicVar).coerceAtLeast(MIN_VARIANCE)
         val gain = DoubleArray(d) { idx -> pX[idx] / innovationVar }
-        val innovation = residual - StatsFacade.dot(x, posterior.mean)
+        val innovation = residual - mk.linalg.dot(x, posterior.mean)
 
         val nextMean = mk.ndarray(DoubleArray(d) { idx -> posterior.mean[idx] + gain[idx] * innovation })
         val joseph = computeJosephCovariance(d, gain, features, predictedCov, observationVariance)
@@ -124,14 +150,14 @@ internal object BayesianRatingModel {
                 aMatrix[i, j] = identityEntry - gain[i] * features[j]
             }
         }
-        val aP = StatsFacade.matMul(aMatrix, predictedCov)
-        val aPaT = StatsFacade.matMul(aP, aMatrix.transpose())
+        val aP = mk.linalg.dot(aMatrix, predictedCov)
+        val aPaT = mk.linalg.dot(aP, aMatrix.transpose())
         for (i in 0 until dimension) {
             for (j in 0 until dimension) {
                 aPaT[i, j] = aPaT[i, j] + observationVariance * gain[i] * gain[j]
             }
         }
-        return MultikOps.symmetriseAndFloor(aPaT, MIN_VARIANCE)
+        return StatsFacade.symmetriseAndFloor(aPaT, MIN_VARIANCE)
     }
 
     fun fitReplay(
@@ -167,10 +193,8 @@ internal object BayesianRatingModel {
         garmentPriorVariance: Double = GARMENT_PRIOR_VARIANCE,
     ): RatingPrediction {
         val x = mk.ndarray(features)
-        val prior = RidgeRatingModel.priorPrediction(raw)
-        val residualMean = StatsFacade.dot(x, posterior.mean)
-        val unclipped = prior + residualMean
-        val activeVar = MultikOps.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
+        val unclipped = priorPrediction(raw) + mk.linalg.dot(x, posterior.mean)
+        val activeVar = StatsFacade.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
         val epistemicVar = (activeVar + unseenPieceCount * garmentPriorVariance).coerceAtLeast(0.0)
         return RatingPrediction(
             mean = unclipped.coerceIn(1.0, 5.0),
@@ -190,18 +214,17 @@ internal object BayesianRatingModel {
         precipitationProbability: Double? = null,
         rainVolumeMm: Double? = null,
     ): RatingPrediction {
-        val raw =
-            FeatureExtractor.extractRaw(
-                tempC = tempC,
-                isRainy = isRainy,
-                pieces = pieces,
-                typeById = typeById,
-                windSpeedMs = windSpeedMs,
-                precipitationProbability = precipitationProbability,
-                rainVolumeMm = rainVolumeMm,
+        val extracted =
+            FeatureExtractor.extractForModel(
+                model,
+                tempC,
+                isRainy,
+                pieces,
+                typeById,
+                windSpeedMs,
+                precipitationProbability,
+                rainVolumeMm,
             )
-        val features = FeatureExtractor.buildFeatures(raw, model.scaler, pieces, model.activePieceIndexById)
-        val unseenCount = FeatureExtractor.countUnseenPieces(pieces, model.activePieceIndexById)
-        return predict(model.ratingPosterior, raw, features, unseenPieceCount = unseenCount)
+        return predict(model.ratingPosterior, extracted.raw, extracted.features, unseenPieceCount = extracted.unseenPieceIds.size)
     }
 }

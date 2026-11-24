@@ -205,7 +205,7 @@ class CandidateGeneratorTest {
         val artifact =
             RecommendationModelArtifact(
                 scaler = scaler,
-                ridgeWeights = weights,
+                ratingMean = weights,
             )
         val modelState =
             ModelState(

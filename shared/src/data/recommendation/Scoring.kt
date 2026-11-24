@@ -7,35 +7,83 @@ import kotlin.math.abs
 import kotlin.math.min
 
 /**
- * Candidate scoring:
- * - MODEL predicts the 1–5 feeling score with the decoded trained regression model.
- * - HEURISTIC compares actual vs ideal warmth.
+ * Single source of truth for candidate scoring:
+ * - MODEL (and trained HEURISTIC) predicts the 1–5 feeling score and thermal probabilities using
+ *   the decoded Bayesian comfort posteriors.
+ * - HEURISTIC without a decoded model compares actual vs learned ideal warmth.
  * - FALLBACK ranks logged outfits above the single constructed suggestion.
- * Selfie-only candidates (empty piece list) compete in MODEL/HEURISTIC using their own past
- * survey feeling score plus the temperature-distance penalty rather than garment warmth.
+ * Selfie-only candidates (empty piece list) compete using their own past survey feeling score
+ * plus the temperature-distance penalty rather than garment warmth.
  */
 internal object Scoring {
     private const val RAINY_BONUS = 0.3
     private const val DEFAULT_IDEAL_WARMTH = 3.0
     private const val DEFAULT_SELFIE_HISTORY_SCORE = 3.0
 
-    fun scoreCandidate(
-        input: RecommendationInput,
+    fun evaluateCandidate(
+        context: RecommendationScoringContext,
         candidate: OutfitCandidate,
-        typeById: Map<Long, ClothingType>,
-        mode: RecommendationMode,
-        decodedModel: DecodedModel?,
-    ): Double {
-        val hasUsableModel = decodedModel != null && input.tempC != null && input.surveyedCount >= 1
-        val baseScore =
-            when {
-                mode == RecommendationMode.FALLBACK -> fallbackRank(candidate)
-                candidate.pieces.isEmpty() && candidate.loggedEntry != null -> selfieHistoryScore(candidate)
-                hasUsableModel -> modelScore(input, candidate.pieces, typeById, decodedModel)
-                else -> heuristicScore(input, candidate, typeById)
-            }
-        return baseScore - temperaturePenalty(candidate, input.tempC)
+    ): EvaluatedCandidate {
+        val input = context.input
+        val model = context.decodedModel
+        val tempC = input.tempC
+        val isSelfieOnly = candidate.pieces.isEmpty() && candidate.loggedEntry != null
+        val penalty = temperaturePenalty(candidate, tempC)
+        val useTrainedModel = model != null && tempC != null && !isSelfieOnly && context.mode != RecommendationMode.FALLBACK
+
+        return if (useTrainedModel) {
+            val extracted =
+                FeatureExtractor.extractForModel(
+                    model = model,
+                    tempC = tempC,
+                    isRainy = input.isRainy,
+                    pieces = candidate.pieces,
+                    typeById = context.typeById,
+                    windSpeedMs = input.windSpeedMs,
+                    precipitationProbability = input.precipitationProbability,
+                    rainVolumeMm = input.rainVolumeMm,
+                )
+            val comfort =
+                BayesianComfortModel.predict(
+                    ratingPosterior = model.ratingPosterior,
+                    thermalPosterior = model.thermalPosterior,
+                    raw = extracted.raw,
+                    features = extracted.features,
+                    unseenPieceCount = extracted.unseenPieceIds.size,
+                )
+            val rawScore = if (input.surveyedCount >= 1) comfort.rating.mean else 0.0
+            EvaluatedCandidate(
+                candidate = candidate,
+                baseScore = rawScore - penalty,
+                tempPenalty = penalty,
+                raw = extracted.raw,
+                features = extracted.features,
+                unseenPieceIds = extracted.unseenPieceIds,
+                comfort = comfort,
+            )
+        } else {
+            val rawScore =
+                when {
+                    context.mode == RecommendationMode.FALLBACK -> fallbackRank(candidate)
+                    isSelfieOnly -> selfieHistoryScore(candidate)
+                    else -> heuristicScore(input, candidate, context.typeById)
+                }
+            EvaluatedCandidate(
+                candidate = candidate,
+                baseScore = rawScore - penalty,
+                tempPenalty = penalty,
+                raw = null,
+                features = null,
+                unseenPieceIds = emptyList(),
+                comfort = null,
+            )
+        }
     }
+
+    fun scoreCandidate(
+        context: RecommendationScoringContext,
+        candidate: OutfitCandidate,
+    ): Double = evaluateCandidate(context, candidate).baseScore
 
     /** MODEL: predicted 1–5 feeling score using the decoded Bayesian rating posterior. */
     fun modelScore(
@@ -62,13 +110,6 @@ internal object Scoring {
                 ).mean
         }
     }
-
-    /** Convenience overload kept for unit tests and legacy callers. */
-    fun modelScore(
-        input: RecommendationInput,
-        candidate: OutfitCandidate,
-        typeById: Map<Long, ClothingType>,
-    ): Double = modelScore(input, candidate.pieces, typeById, DecodedModel.decode(input.modelState))
 
     /** HEURISTIC: 5 minus the warmth distance to the ideal, capped at a 4-point penalty. */
     fun heuristicScore(

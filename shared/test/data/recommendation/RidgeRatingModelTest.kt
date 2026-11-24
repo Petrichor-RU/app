@@ -76,14 +76,14 @@ class RidgeRatingModelTest {
         val tee = piece(1, teeType.id, Material.COTTON)
         val jeans = piece(2, jeansType.id, Material.COTTON)
         val single = listOf(FeatureExtractor.extractRaw(15.0, false, listOf(tee, jeans), typeById) to 4.0)
-        val singleArtifact = RidgeRatingModel.fit(single)
-        assertEquals(FeatureExtractor.CORE_FEATURE_COUNT, singleArtifact.ridgeWeights.size)
-        assertTrue(singleArtifact.ridgeWeights.all { it.isFinite() })
+        val singleArtifact = RidgeRatingBaseline.fit(single)
+        assertEquals(FeatureExtractor.CORE_FEATURE_COUNT, singleArtifact.ratingMean.size)
+        assertTrue(singleArtifact.ratingMean.all { it.isFinite() })
 
         val duplicate = List(6) { FeatureExtractor.extractRaw(15.0, false, listOf(tee, jeans), typeById) to 5.0 }
-        val dupArtifact = RidgeRatingModel.fit(duplicate)
-        assertTrue(dupArtifact.ridgeWeights.all { it.isFinite() })
-        val pred = RidgeRatingModel.predict(dupArtifact, single.first().first)
+        val dupArtifact = RidgeRatingBaseline.fit(duplicate)
+        assertTrue(dupArtifact.ratingMean.all { it.isFinite() })
+        val pred = RidgeRatingBaseline.predict(dupArtifact, single.first().first)
         assertTrue(pred in 1.0..5.0)
     }
 
@@ -118,7 +118,7 @@ class RidgeRatingModelTest {
         val summerOutfit = listOf(linenTee, linenPants)
         val samples = multiSeasonSamples(winterOutfit, mildOutfit, summerOutfit)
 
-        val artifact = RidgeRatingModel.fit(samples)
+        val artifact = RidgeRatingBaseline.fit(samples)
         val modelState =
             ModelState(
                 schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
@@ -152,7 +152,7 @@ class RidgeRatingModelTest {
         val validArtifact =
             RecommendationModelArtifact(
                 scaler = validScaler,
-                ridgeWeights = List(FeatureExtractor.CORE_FEATURE_COUNT) { 0.0 },
+                ratingMean = List(FeatureExtractor.CORE_FEATURE_COUNT) { 0.0 },
             )
         val validState =
             ModelState(
@@ -166,7 +166,7 @@ class RidgeRatingModelTest {
         assertNull(DecodedModel.decode(validState.copy(schemaVersion = ModelState.CURRENT_SCHEMA_VERSION + 1)))
         assertNull(DecodedModel.decode(validState.copy(artifactJson = "{not-valid-json")))
 
-        val wrongSizeArtifact = validArtifact.copy(ridgeWeights = listOf(0.0, 1.0))
+        val wrongSizeArtifact = validArtifact.copy(ratingMean = listOf(0.0, 1.0))
         assertNull(DecodedModel.decode(validState.copy(artifactJson = Json.encodeToString(wrongSizeArtifact))))
 
         val zeroStdScaler = validScaler.copy(tempCStd = 0.0)

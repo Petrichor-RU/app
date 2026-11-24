@@ -3,6 +3,7 @@ package nl.petrichor.app.data.recommendation
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.data.recommendation.WarmthEncoding.warmth
 import nl.petrichor.app.data.recommendation.WarmthEncoding.zoneWarmth
+import nl.petrichor.app.data.recommendation.WarmthEncoding.zonesFor
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
@@ -12,11 +13,13 @@ import kotlin.math.abs
  * Candidate construction: logged outfits (with score-driven same-zone laundry replacements)
  * plus constructed per-zone combinations with multi-layer upper support.
  * Split outfits and full-body outfits remain mutually exclusive; outer layers are offered below
- * [OUTER_MAX_TEMP_C]. Logged and constructed candidates keep separate budgets before ranking.
+ * [OUTER_MAX_TEMP_C] or in rain with rain-protective shells. Logged and constructed candidates
+ * keep separate budgets before ranking.
  */
 internal object CandidateGenerator {
     private const val OUTER_MAX_TEMP_C = 14.0
     private const val RAIN_OUTER_EXPOSURE_THRESHOLD = 0.5
+    private const val LAUNDRY_REPLACEMENT_TOP_K = 5
     private const val TOP_K_UPPER_BASE = 2
     private const val TOP_K_UPPER_OUTER = 2
     private const val TOP_K_LOWER = 3
@@ -101,10 +104,78 @@ internal object CandidateGenerator {
             }
 
             else -> {
-                LaundryReplacement
-                    .resolvePieces(context, entryWithPieces)
+                resolveLoggedPieces(context, entryWithPieces)
                     ?.let { OutfitCandidate(entryWithPieces, it, entry.photoPath, null, source) }
             }
+        }
+    }
+
+    /**
+     * Resolves a logged entry's pieces against the clean pool; returns null when the outfit
+     * cannot be worn (an archived piece or an essential zone in laundry with no clean replacement).
+     * Dirty pieces evaluate the top-K clean same-zone replacements using the active scorer.
+     */
+    private fun resolveLoggedPieces(
+        context: RecommendationScoringContext,
+        entryWithPieces: OutfitEntryWithPieces,
+    ): List<ClothingPiece>? {
+        val originalPieces = entryWithPieces.pieces
+        val cleanUntouched =
+            originalPieces.filter { !it.archived && it.laundryUntilEpochMs <= context.input.nowEpochMs }
+        val resolved = mutableListOf<ClothingPiece>()
+        var skip = false
+
+        for (piece in originalPieces) {
+            when {
+                piece.archived -> {
+                    skip = true
+                }
+
+                piece.laundryUntilEpochMs > context.input.nowEpochMs -> {
+                    val remainingClean = cleanUntouched.filter { candidate -> resolved.none { it.id == candidate.id } }
+                    val replacement =
+                        bestScoredReplacement(piece, resolved, remainingClean, context, entryWithPieces)
+                    when {
+                        replacement == null && isEssentialZone(piece, context.typeById) -> skip = true
+                        replacement != null -> resolved += replacement
+                    }
+                }
+
+                else -> {
+                    if (resolved.none { it.id == piece.id }) resolved += piece
+                }
+            }
+            if (skip) break
+        }
+        return if (skip) null else resolved.distinctBy { it.id }
+    }
+
+    private fun bestScoredReplacement(
+        piece: ClothingPiece,
+        alreadyResolved: List<ClothingPiece>,
+        remainingClean: List<ClothingPiece>,
+        context: RecommendationScoringContext,
+        entryWithPieces: OutfitEntryWithPieces,
+    ): ClothingPiece? {
+        val zones = zonesFor(context.typeById[piece.typeId]?.supertype ?: ClothingSupertype.ACCESSORIES)
+        val originalWarmth = warmth(piece, context.typeById[piece.typeId])
+        val usedIds = alreadyResolved.mapTo(mutableSetOf()) { it.id }
+        val topK =
+            if (zones.isEmpty()) {
+                emptyList()
+            } else {
+                context.pool
+                    .filter { candidate ->
+                        candidate.id !in usedIds &&
+                            zonesFor(context.typeById[candidate.typeId]?.supertype ?: ClothingSupertype.ACCESSORIES) == zones
+                    }.sortedBy { candidate -> abs(warmth(candidate, context.typeById[candidate.typeId]) - originalWarmth) }
+                    .take(LAUNDRY_REPLACEMENT_TOP_K)
+            }
+        val source = RecommendationSource.valueOf(context.mode.name)
+        return topK.maxByOrNull { replacement ->
+            val trialPieces = (alreadyResolved + replacement + remainingClean).distinctBy { it.id }
+            val trialCandidate = OutfitCandidate(entryWithPieces, trialPieces, entryWithPieces.entry.photoPath, null, source)
+            Scoring.scoreCandidate(context, trialCandidate)
         }
     }
 
@@ -141,28 +212,28 @@ internal object CandidateGenerator {
                 rankByTarget(
                     byZone[CoverageZone.LOWER].orEmpty(),
                     typeById,
-                    ideal * (ZONE_SHARE[CoverageZone.LOWER] ?: 0.0),
+                    ideal * ZONE_SHARE.getValue(CoverageZone.LOWER),
                     TOP_K_LOWER,
                 ),
             fullBodies =
                 rankByTarget(
                     byZone[CoverageZone.FULL_BODY].orEmpty(),
                     typeById,
-                    ideal * (ZONE_SHARE[CoverageZone.FULL_BODY] ?: 0.0),
+                    ideal * ZONE_SHARE.getValue(CoverageZone.FULL_BODY),
                     TOP_K_FULL_BODY,
                 ),
             heads =
                 rankByTarget(
                     byZone[CoverageZone.HEAD].orEmpty(),
                     typeById,
-                    ideal * (ZONE_SHARE[CoverageZone.HEAD] ?: 0.0),
+                    ideal * ZONE_SHARE.getValue(CoverageZone.HEAD),
                     TOP_K_HEAD,
                 ),
             feet =
                 rankByTarget(
                     byZone[CoverageZone.FEET].orEmpty(),
                     typeById,
-                    ideal * (ZONE_SHARE[CoverageZone.FEET] ?: 0.0),
+                    ideal * ZONE_SHARE.getValue(CoverageZone.FEET),
                     TOP_K_FEET,
                 ),
             accessories = rankByTarget(byZone[CoverageZone.ACCESSORIES].orEmpty(), typeById, 0.0, TOP_K_ACCESSORIES),
@@ -184,7 +255,7 @@ internal object CandidateGenerator {
         val offerOuter = coldOuter || rainOuter
         val eligibleOuterPool = if (coldOuter || baseUpperPool.isEmpty()) outerUpperPool else rainOuterPool
 
-        val upperTarget = ideal * (ZONE_SHARE[CoverageZone.UPPER] ?: 0.0)
+        val upperTarget = ideal * ZONE_SHARE.getValue(CoverageZone.UPPER)
         val baseTarget = if (offerOuter && eligibleOuterPool.isNotEmpty()) upperTarget * BASE_WITH_OUTER_SHARE else upperTarget
         val selectedBases = rankByTarget(baseUpperPool, typeById, baseTarget, TOP_K_UPPER_BASE)
         val outerTarget = if (selectedBases.isNotEmpty()) upperTarget * (1.0 - BASE_WITH_OUTER_SHARE) else upperTarget
@@ -198,22 +269,6 @@ internal object CandidateGenerator {
     }
 
     private fun combinationsOf(options: LayerOptions): List<List<ClothingPiece>> {
-        val bodyOptions = buildSplitBodyOptions(options) + buildFullBodyOptions(options)
-        if (bodyOptions.isEmpty()) return emptyList()
-        val headOptions = listOf(emptyList<ClothingPiece>()) + options.heads.map { listOf(it) }
-        val feetOptions = listOf(emptyList<ClothingPiece>()) + options.feet.map { listOf(it) }
-        val accessoryOptions = listOf(emptyList<ClothingPiece>()) + options.accessories.map { listOf(it) }
-        return headOptions.flatMap { head ->
-            bodyOptions.flatMap { body ->
-                feetOptions.flatMap { feet ->
-                    accessoryOptions.map { acc -> head + body + feet + acc }
-                }
-            }
-        }
-    }
-
-    private fun buildSplitBodyOptions(options: LayerOptions): List<List<ClothingPiece>> {
-        if (options.lowers.isEmpty()) return emptyList()
         val upperStacks =
             if (options.upperBases.isNotEmpty()) {
                 val baseOnly = options.upperBases.map { listOf(it) }
@@ -227,20 +282,32 @@ internal object CandidateGenerator {
             } else {
                 options.upperOuters.map { listOf(it) }
             }
-        return upperStacks.flatMap { upper ->
-            options.lowers.map { lower -> upper + lower }
-        }
-    }
-
-    private fun buildFullBodyOptions(options: LayerOptions): List<List<ClothingPiece>> {
-        val single = options.fullBodies.map { listOf(it) }
-        val layered =
-            if (options.offerOuter) {
-                options.fullBodies.flatMap { full -> options.upperOuters.map { outer -> listOf(full, outer) } }
-            } else {
+        val splitBody =
+            if (options.lowers.isEmpty()) {
                 emptyList()
+            } else {
+                upperStacks.flatMap { upper -> options.lowers.map { lower -> upper + lower } }
             }
-        return single + layered
+        val fullBody =
+            options.fullBodies.map { listOf(it) } +
+                if (options.offerOuter) {
+                    options.fullBodies.flatMap { full -> options.upperOuters.map { outer -> listOf(full, outer) } }
+                } else {
+                    emptyList()
+                }
+        val bodyOptions = splitBody + fullBody
+        if (bodyOptions.isEmpty()) return emptyList()
+
+        val headOptions = listOf(emptyList<ClothingPiece>()) + options.heads.map { listOf(it) }
+        val feetOptions = listOf(emptyList<ClothingPiece>()) + options.feet.map { listOf(it) }
+        val accessoryOptions = listOf(emptyList<ClothingPiece>()) + options.accessories.map { listOf(it) }
+        return headOptions.flatMap { head ->
+            bodyOptions.flatMap { body ->
+                feetOptions.flatMap { feet ->
+                    accessoryOptions.map { acc -> head + body + feet + acc }
+                }
+            }
+        }
     }
 
     private fun fallbackConstructed(
@@ -270,6 +337,14 @@ internal object CandidateGenerator {
             ),
         )
     }
+}
+
+private fun isEssentialZone(
+    piece: ClothingPiece,
+    typeById: Map<Long, ClothingType>,
+): Boolean {
+    val zones = zonesFor(typeById[piece.typeId]?.supertype ?: ClothingSupertype.ACCESSORIES)
+    return CoverageZone.UPPER in zones || CoverageZone.LOWER in zones
 }
 
 private fun rankByTarget(

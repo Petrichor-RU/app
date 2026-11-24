@@ -8,7 +8,6 @@ import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
 import nl.petrichor.app.data.outfit.FakeOutfitDao
-import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryPiece
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
@@ -94,14 +93,14 @@ class BayesianComfortModelTest {
         val priorVariances = BayesianRatingModel.defaultPriorVariances()
         val obsVariance = BayesianRatingModel.DEFAULT_OBSERVATION_VARIANCE
         val precisionDiagonal = DoubleArray(priorVariances.size) { i -> obsVariance / priorVariances[i] }
-        val batchArtifact = RidgeRatingModel.fitWithDiagonalPrecision(samples, precisionDiagonal)
+        val batchArtifact = RidgeRatingBaseline.fitWithDiagonalPrecision(samples, precisionDiagonal)
 
         val scaler = FeatureScaler.fit(samples.map { it.first })
         val steps =
             samples.map { (raw, score) ->
                 BayesianRatingStep(
                     features = FeatureExtractor.buildFeatures(raw, scaler),
-                    residual = score - RidgeRatingModel.priorPrediction(raw),
+                    residual = score - BayesianRatingModel.priorPrediction(raw),
                     deltaDays = 5.0,
                 )
             }
@@ -114,11 +113,11 @@ class BayesianComfortModelTest {
             )
 
         for (i in 0 until FeatureExtractor.CORE_FEATURE_COUNT) {
-            assertEquals(batchArtifact.ridgeWeights[i], kalmanPosterior.mean[i], 1e-9, "Mismatch at weight index $i")
+            assertEquals(batchArtifact.ratingMean[i], kalmanPosterior.mean[i], 1e-9, "Mismatch at weight index $i")
         }
         val probe = samples.first().first
         val kalmanPred = BayesianRatingModel.predict(kalmanPosterior, probe, FeatureExtractor.buildFeatures(probe, scaler)).mean
-        val batchPred = RidgeRatingModel.predict(batchArtifact, probe)
+        val batchPred = RidgeRatingBaseline.predict(batchArtifact, probe)
         assertEquals(batchPred, kalmanPred, 1e-9)
     }
 
@@ -249,7 +248,7 @@ class BayesianComfortModelTest {
             BayesianRatingModel.update(
                 state11.ratingPosterior,
                 lastFeatures,
-                lastScore - RidgeRatingModel.priorPrediction(lastRaw),
+                lastScore - BayesianRatingModel.priorPrediction(lastRaw),
                 deltaDays = 1.0,
             )
         for (i in 0 until decodedInc12.dimension) {
@@ -334,7 +333,15 @@ class BayesianComfortModelTest {
                 modelState = state,
             )
         val candidate = OutfitCandidate(null, listOf(sweater, jeans), null, null, RecommendationSource.HEURISTIC)
-        val score = Scoring.scoreCandidate(input, candidate, typeById, RecommendationMode.HEURISTIC, decoded)
+        val context =
+            RecommendationScoringContext(
+                input = input,
+                pool = input.wardrobePieces,
+                typeById = typeById,
+                mode = RecommendationMode.HEURISTIC,
+                decodedModel = decoded,
+            )
+        val score = Scoring.scoreCandidate(context, candidate)
         val expectedModelScore = Scoring.modelScore(input, candidate.pieces, typeById, decoded)
         assertEquals(expectedModelScore, score, 1e-12)
     }

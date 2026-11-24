@@ -2,30 +2,23 @@ package nl.petrichor.app.data.recommendation
 
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
+import org.jetbrains.kotlinx.multik.api.linalg.dot
+import org.jetbrains.kotlinx.multik.api.linalg.solve
 import org.jetbrains.kotlinx.multik.api.mk
 import org.jetbrains.kotlinx.multik.api.ndarray
 import org.jetbrains.kotlinx.multik.api.zeros
 import org.jetbrains.kotlinx.multik.ndarray.data.D1Array
+import org.jetbrains.kotlinx.multik.ndarray.data.D2Array
 import org.jetbrains.kotlinx.multik.ndarray.data.get
 import org.jetbrains.kotlinx.multik.ndarray.data.set
-import kotlin.math.abs
-import kotlin.math.min
 
 /**
- * Prior-plus-residual ridge regression model backed by `multik-kotlin`.
- *
- * Fits residuals `r_i = y_i - priorPrediction(x_i)` over the core condition-aware feature vector
- * with a fixed prior precision `lambda` (independent of `n`, aligning with Gaussian prior variance
- * `sigma^2 / lambda`) and solves `(X^T X + Lambda) beta = X^T r` via PLU decomposition, keeping
- * the intercept unpenalised.
+ * Phase 2 batch ridge baseline retained strictly in test code for ablation comparisons in
+ * [EvaluationHarness] and zero-drift Kalman equivalence checks in [BayesianComfortModelTest].
  */
-internal object RidgeRatingModel {
+internal object RidgeRatingBaseline {
     const val DEFAULT_PRIOR_PRECISION = 1.0
-
-    fun priorPrediction(raw: RawOutfitSignals): Double {
-        val ideal = priorIdealWarmth(raw.tempC, raw.isRainy)
-        return (5.0 - min(4.0, abs(raw.totalWarmth - ideal))).coerceIn(1.0, 5.0)
-    }
+    private const val DEFAULT_SOLVE_JITTER = 1e-8
 
     fun fit(
         samples: List<Pair<RawOutfitSignals, Double>>,
@@ -38,15 +31,13 @@ internal object RidgeRatingModel {
         return fitWithDiagonalPrecision(samples, precisionDiagonal)
     }
 
-    internal fun fitWithDiagonalPrecision(
+    fun fitWithDiagonalPrecision(
         samples: List<Pair<RawOutfitSignals, Double>>,
         precisionDiagonal: DoubleArray,
     ): RecommendationModelArtifact {
         require(samples.isNotEmpty()) { "Cannot fit a ridge model without samples" }
         val d = FeatureExtractor.CORE_FEATURE_COUNT
-        require(precisionDiagonal.size == d) {
-            "Expected $d precision entries"
-        }
+        require(precisionDiagonal.size == d) { "Expected $d precision entries" }
         val rawSignals = samples.map { it.first }
         val scaler = FeatureScaler.fit(rawSignals)
         val n = samples.size
@@ -58,23 +49,22 @@ internal object RidgeRatingModel {
                     xMatrix[row, col] = features[col]
                 }
                 val (signals, target) = samples[row]
-                target - priorPrediction(signals)
+                target - BayesianRatingModel.priorPrediction(signals)
             }
 
         val rVector = mk.ndarray(residuals)
         val xt = xMatrix.transpose()
-        val normalMatrix = StatsFacade.matMul(xt, xMatrix)
+        val normalMatrix = mk.linalg.dot(xt, xMatrix)
         for (i in 0 until d) {
             normalMatrix[i, i] = normalMatrix[i, i] + precisionDiagonal[i]
         }
-        val rhs = StatsFacade.matVec(xt, rVector)
-        val beta = StatsFacade.solveLinearSystem(normalMatrix, rhs)
-        val weights = List(d) { idx -> beta[idx] }
+        val rhs = mk.linalg.dot(xt, rVector)
+        val beta = solveLinearSystem(normalMatrix, rhs)
 
         return RecommendationModelArtifact(
             featureSchemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
             scaler = scaler,
-            ridgeWeights = weights,
+            ratingMean = List(d) { idx -> beta[idx] },
         )
     }
 
@@ -99,13 +89,14 @@ internal object RidgeRatingModel {
                 rainVolumeMm = rainVolumeMm,
             )
         val features = FeatureExtractor.buildCoreFeatures(raw, model.scaler)
+        val mean = model.ratingPosterior.mean
         val coreWeights =
-            if (model.weights.size == FeatureExtractor.CORE_FEATURE_COUNT) {
-                model.weights
+            if (mean.size == FeatureExtractor.CORE_FEATURE_COUNT) {
+                mean
             } else {
-                mk.ndarray(DoubleArray(FeatureExtractor.CORE_FEATURE_COUNT) { idx -> model.weights[idx] })
+                mk.ndarray(DoubleArray(FeatureExtractor.CORE_FEATURE_COUNT) { idx -> mean[idx] })
             }
-        return predictFromFeatures(raw, features, coreWeights)
+        return (BayesianRatingModel.priorPrediction(raw) + mk.linalg.dot(coreWeights, mk.ndarray(features))).coerceIn(1.0, 5.0)
     }
 
     fun predict(
@@ -113,16 +104,21 @@ internal object RidgeRatingModel {
         raw: RawOutfitSignals,
     ): Double {
         val features = FeatureExtractor.buildCoreFeatures(raw, artifact.scaler)
-        val coreWeights = mk.ndarray(DoubleArray(FeatureExtractor.CORE_FEATURE_COUNT) { idx -> artifact.ridgeWeights[idx] })
-        return predictFromFeatures(raw, features, coreWeights)
+        val coreWeights = mk.ndarray(DoubleArray(FeatureExtractor.CORE_FEATURE_COUNT) { idx -> artifact.ratingMean[idx] })
+        return (BayesianRatingModel.priorPrediction(raw) + mk.linalg.dot(coreWeights, mk.ndarray(features))).coerceIn(1.0, 5.0)
     }
 
-    private fun predictFromFeatures(
-        raw: RawOutfitSignals,
-        features: DoubleArray,
-        weights: D1Array<Double>,
-    ): Double {
-        val residual = StatsFacade.dot(weights, mk.ndarray(features))
-        return (priorPrediction(raw) + residual).coerceIn(1.0, 5.0)
+    fun solveLinearSystem(
+        matrix: D2Array<Double>,
+        rhs: D1Array<Double>,
+        jitter: Double = DEFAULT_SOLVE_JITTER,
+    ): D1Array<Double> {
+        val direct = runCatching { mk.linalg.solve(matrix, rhs) }.getOrNull()
+        if (direct != null && (0 until direct.size).all { direct[it].isFinite() }) return direct
+        val damped = matrix.copy()
+        for (i in 0 until rhs.size) {
+            damped[i, i] = damped[i, i] + jitter
+        }
+        return mk.linalg.solve(damped, rhs)
     }
 }
