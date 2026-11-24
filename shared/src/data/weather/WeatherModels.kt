@@ -20,6 +20,8 @@ data class WeatherSnapshot(
     val feelsLike: Int,
     val description: String,
     val icon: String,
+    /** OpenWeatherMap weather condition code (`weather[].id`, first entry is primary); see [WeatherConditions]. */
+    val conditionId: Int,
     val humidity: Int,
     val windSpeed: Int,
     val forecast: List<ForecastDay>,
@@ -38,4 +40,6 @@ data class ForecastDay(
     val min: Int,
     val max: Int,
     val icon: String,
+    /** OpenWeatherMap weather condition code (`weather[].id`, first entry is primary); see [WeatherConditions]. */
+    val conditionId: Int,
 )

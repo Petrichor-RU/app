@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.outfit
 
 import kotlinx.datetime.LocalDate
+import nl.petrichor.app.data.weather.WeatherConditions
 import nl.petrichor.app.data.weather.WeatherSnapshot
 
 /**
@@ -16,13 +17,6 @@ data class EntryWeatherSnapshot(
     val weatherIcon: String?,
     val isRainy: Boolean,
 )
-
-private val rainIconPrefixes = setOf("09", "10", "11") // OpenWeatherMap icon codes for rain
-
-internal fun isRainy(
-    description: String?,
-    icon: String?,
-): Boolean = description?.contains("rain", ignoreCase = true) == true || icon?.take(2) in rainIconPrefixes
 
 /**
  * Computes the snapshot for an outfit logged on [date] given the current [weather] of the
@@ -48,8 +42,8 @@ fun buildEntryWeatherSnapshot(
                 weatherDescription = weather.description,
                 weatherIcon = weather.icon,
                 isRainy =
-                    isRainy(weather.description, weather.icon) ||
-                        isRainy(null, forecastDay?.icon),
+                    WeatherConditions.isRainy(weather.description, weather.conditionId, weather.icon) ||
+                        WeatherConditions.isRainy(null, forecastDay?.conditionId, forecastDay?.icon),
             )
         }
 
@@ -61,7 +55,7 @@ fun buildEntryWeatherSnapshot(
                 maxTempC = forecastDay.max.toDouble(),
                 weatherDescription = null,
                 weatherIcon = forecastDay.icon,
-                isRainy = isRainy(null, forecastDay.icon),
+                isRainy = WeatherConditions.isRainy(null, forecastDay.conditionId, forecastDay.icon),
             )
         }
 

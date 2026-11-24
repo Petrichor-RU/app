@@ -61,6 +61,7 @@ class WeatherRepository(
                 feelsLike = main["feels_like"]!!.jsonPrimitive.double.toInt(),
                 description = currentWeather["description"]!!.jsonPrimitive.content.replaceFirstChar { it.uppercase() },
                 icon = currentWeather["icon"]!!.jsonPrimitive.content,
+                conditionId = currentWeather["id"]!!.jsonPrimitive.int,
                 humidity = main["humidity"]!!.jsonPrimitive.int,
                 windSpeed =
                     current["wind"]!!
@@ -74,16 +75,13 @@ class WeatherRepository(
                         .map { item ->
                             val itemObject = item.jsonObject
                             val itemMain = itemObject["main"]!!.jsonObject
+                            val itemWeather = itemObject["weather"]!!.jsonArray.first().jsonObject
                             ForecastDay(
                                 label = itemObject["dt_txt"]!!.jsonPrimitive.content.substringBefore(" "),
                                 min = itemMain["temp_min"]!!.jsonPrimitive.double.toInt(),
                                 max = itemMain["temp_max"]!!.jsonPrimitive.double.toInt(),
-                                icon =
-                                    itemObject["weather"]!!
-                                        .jsonArray
-                                        .first()
-                                        .jsonObject["icon"]!!
-                                        .jsonPrimitive.content,
+                                icon = itemWeather["icon"]!!.jsonPrimitive.content,
+                                conditionId = itemWeather["id"]!!.jsonPrimitive.int,
                             )
                         },
             )

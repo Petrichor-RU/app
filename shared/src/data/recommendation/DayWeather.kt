@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.recommendation
 
 import kotlinx.datetime.LocalDate
+import nl.petrichor.app.data.weather.WeatherConditions
 import nl.petrichor.app.data.weather.WeatherSnapshot
 
 internal data class DayWeather(
@@ -31,8 +32,11 @@ internal fun WeatherSnapshot?.dayWeatherFor(
     val forecastDay = forecast.firstOrNull { it.label == date.toString() }
     if (date != today && forecastDay == null) return DayWeather()
     val isRainy =
-        (date == today && description.contains("rain", ignoreCase = true)) ||
-            forecastDay?.icon?.take(2) in setOf("09", "10", "11") // Checks the OpenWeatherMap icon code for rain
+        WeatherConditions.isRainy(
+            description = description.takeIf { date == today },
+            conditionId = forecastDay?.conditionId,
+            iconCode = forecastDay?.icon,
+        )
     return DayWeather(
         isRainy = isRainy,
         minTemperature = if (date == today) minOf(forecastDay?.min ?: temperature, temperature) else forecastDay?.min,

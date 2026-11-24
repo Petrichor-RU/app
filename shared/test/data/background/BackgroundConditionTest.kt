@@ -15,19 +15,21 @@ import kotlin.time.Instant
 
 internal fun snapshot(
     icon: String = "01d",
+    conditionId: Int = 800,
     offset: Long = 0,
     known: Boolean = true,
 ) = WeatherSnapshot(
-    Place("Test", Coordinates(0.0, 0.0)),
-    20,
-    20,
-    "Clear",
-    icon,
-    50,
-    5,
-    emptyList(),
-    offset,
-    known,
+    place = Place("Test", Coordinates(0.0, 0.0)),
+    temperature = 20,
+    feelsLike = 20,
+    description = "Clear",
+    icon = icon,
+    conditionId = conditionId,
+    humidity = 50,
+    windSpeed = 5,
+    forecast = emptyList(),
+    utcOffsetSeconds = offset,
+    utcOffsetKnown = known,
 )
 
 class BackgroundConditionTest {
@@ -66,7 +68,28 @@ class BackgroundConditionTest {
     }
 
     @Test
-    fun `icon mapping covers day night and unknown codes`() {
+    fun `condition code groups map to moods and unknown codes fall back`() {
+        val expected =
+            mapOf(
+                200 to WeatherMood.THUNDERSTORM,
+                300 to WeatherMood.RAIN,
+                500 to WeatherMood.RAIN,
+                511 to WeatherMood.RAIN,
+                600 to WeatherMood.SNOW,
+                701 to WeatherMood.FOG,
+                800 to WeatherMood.CLEAR,
+                801 to WeatherMood.PARTLY_CLOUDY,
+                804 to WeatherMood.OVERCAST,
+            )
+        for ((code, mood) in expected) {
+            assertEquals(mood, WeatherMood.from(code, null))
+        }
+        assertEquals(WeatherMood.PARTLY_CLOUDY, WeatherMood.from(999, null))
+        assertEquals(WeatherMood.PARTLY_CLOUDY, WeatherMood.from(null, null))
+    }
+
+    @Test
+    fun `icon codes map to moods for day night and unknown codes when no condition code is present`() {
         val expected =
             mapOf(
                 "01" to WeatherMood.CLEAR,
@@ -80,16 +103,24 @@ class BackgroundConditionTest {
                 "50" to WeatherMood.FOG,
             )
         for ((prefix, mood) in expected) {
-            assertEquals(mood, WeatherMood.from(prefix + "d"))
-            assertEquals(mood, WeatherMood.from(prefix + "n"))
+            assertEquals(mood, WeatherMood.from(null, prefix + "d"))
+            assertEquals(mood, WeatherMood.from(null, prefix + "n"))
         }
-        assertEquals(WeatherMood.PARTLY_CLOUDY, WeatherMood.from(""))
-        assertEquals(WeatherMood.PARTLY_CLOUDY, WeatherMood.from("99n"))
+        // 511 "freezing rain" is group 5xx even though the API draws it with the snow icon "13d"
+        assertEquals(WeatherMood.RAIN, WeatherMood.from(511, "13d"))
+        assertEquals(WeatherMood.PARTLY_CLOUDY, WeatherMood.from(null, ""))
+        assertEquals(WeatherMood.PARTLY_CLOUDY, WeatherMood.from(null, "99n"))
     }
 
     @Test
     fun `offset overrides device time and crosses date boundaries`() {
-        val east = BackgroundConditionResolver.resolve(snapshot("13d", 36_000), now, now, TimeZone.UTC)
+        val east =
+            BackgroundConditionResolver.resolve(
+                snapshot(icon = "13d", conditionId = 600, offset = 36_000),
+                now,
+                now,
+                TimeZone.UTC,
+            )
         assertEquals(BackgroundCondition(TimeBand.NIGHT, WeatherMood.SNOW), east)
         val west = BackgroundConditionResolver.resolve(snapshot(offset = -43_200), now, now, TimeZone.UTC)
         assertEquals(TimeBand.NIGHT, west.band)
@@ -107,7 +138,13 @@ class BackgroundConditionTest {
 
     @Test
     fun `stale weather becomes neutral but keeps selected location time`() {
-        val stale = BackgroundConditionResolver.resolve(snapshot("11d", 36_000), now, now - 1.hours, TimeZone.UTC)
+        val stale =
+            BackgroundConditionResolver.resolve(
+                snapshot(icon = "11d", conditionId = 200, offset = 36_000),
+                now,
+                now - 1.hours,
+                TimeZone.UTC,
+            )
         assertEquals(BackgroundCondition(TimeBand.NIGHT, WeatherMood.PARTLY_CLOUDY), stale)
     }
 

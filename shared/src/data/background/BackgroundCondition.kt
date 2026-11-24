@@ -2,6 +2,8 @@ package nl.petrichor.app.data.background
 
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import nl.petrichor.app.data.weather.WeatherCondition
+import nl.petrichor.app.data.weather.WeatherConditions
 import nl.petrichor.app.data.weather.WeatherSnapshot
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.seconds
@@ -46,8 +48,8 @@ enum class TimeBand {
 }
 
 /**
- * Weather mood of the background, mapped from the OpenWeather icon prefix of the current
- * snapshot. Unknown codes fall back to [PARTLY_CLOUDY].
+ * Weather mood of the background, mapped from the current snapshot's weather via the canonical
+ * [WeatherConditions] mapping. Unknown codes fall back to [PARTLY_CLOUDY].
  */
 enum class WeatherMood {
     CLEAR,
@@ -60,17 +62,20 @@ enum class WeatherMood {
     ;
 
     companion object {
-        /** Pure mapping from an OpenWeather icon code (e.g. "10n") to its mood. */
-        fun from(iconCode: String): WeatherMood =
-            when (iconCode.take(2)) {
-                "01" -> CLEAR
-                "02" -> PARTLY_CLOUDY
-                "03", "04" -> OVERCAST
-                "09", "10" -> RAIN
-                "11" -> THUNDERSTORM
-                "13" -> SNOW
-                "50" -> FOG
-                else -> PARTLY_CLOUDY
+        /** Pure mapping from a weather entry's condition code and icon code (e.g. 500, "10n") to its mood. */
+        fun from(
+            conditionId: Int?,
+            iconCode: String?,
+        ): WeatherMood =
+            when (WeatherConditions.from(conditionId, iconCode)) {
+                WeatherCondition.CLEAR -> CLEAR
+                WeatherCondition.PARTLY_CLOUDY -> PARTLY_CLOUDY
+                WeatherCondition.OVERCAST -> OVERCAST
+                WeatherCondition.RAIN -> RAIN
+                WeatherCondition.THUNDERSTORM -> THUNDERSTORM
+                WeatherCondition.SNOW -> SNOW
+                WeatherCondition.FOG -> FOG
+                null -> PARTLY_CLOUDY
             }
     }
 }
@@ -99,7 +104,7 @@ object BackgroundConditionResolver {
     /**
      * Resolves the condition for [now]. Local time comes from the snapshot's UTC offset when
      * [WeatherSnapshot.utcOffsetKnown], otherwise from [deviceZone]. Fresh weather contributes
-     * its icon's mood; missing or stale weather falls back to [WeatherMood.PARTLY_CLOUDY].
+     * its condition's mood; missing or stale weather falls back to [WeatherMood.PARTLY_CLOUDY].
      */
     fun resolve(
         weather: WeatherSnapshot?,
@@ -116,7 +121,7 @@ object BackgroundConditionResolver {
         val fresh = loadedAt != null && now - loadedAt < maxWeatherAge
         return BackgroundCondition(
             TimeBand.from(localTime.hour),
-            if (weather != null && fresh) WeatherMood.from(weather.icon) else WeatherMood.PARTLY_CLOUDY,
+            if (weather != null && fresh) WeatherMood.from(weather.conditionId, weather.icon) else WeatherMood.PARTLY_CLOUDY,
         )
     }
 }

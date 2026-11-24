@@ -237,13 +237,14 @@ class OutfitLogRepositoryTest {
             feelsLike = 10,
             description = "Light rain",
             icon = "10d",
+            conditionId = 500,
             humidity = 80,
             windSpeed = 15,
             forecast =
                 listOf(
-                    ForecastDay("2026-11-12", min = 8, max = 18, icon = "10d"),
-                    ForecastDay("2026-11-13", min = 6, max = 14, icon = "04d"),
-                    ForecastDay("2026-11-14", min = 3, max = 9, icon = "01d"),
+                    ForecastDay("2026-11-12", min = 8, max = 18, icon = "10d", conditionId = 500),
+                    ForecastDay("2026-11-13", min = 6, max = 14, icon = "04d", conditionId = 803),
+                    ForecastDay("2026-11-14", min = 3, max = 9, icon = "01d", conditionId = 800),
                 ),
         )
 }

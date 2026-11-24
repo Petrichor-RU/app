@@ -20,9 +20,10 @@ class WeatherContentTest {
             feelsLike = 8,
             description = "Cloudy",
             icon = "",
+            conditionId = 804,
             humidity = 80,
             windSpeed = 12,
-            forecast = List(5) { ForecastDay("2026-11-0${it + 1}", 5 + it, 12 + it, "") },
+            forecast = List(5) { ForecastDay("2026-11-0${it + 1}", 5 + it, 12 + it, "", 804) },
         )
 
     @Test

@@ -74,7 +74,7 @@ class AppBackgroundControllerTest {
                     selectedPlaces = selected,
                     loadWeather = {
                         if (it == first) pending.await()
-                        Result.success(snapshot("13d").copy(place = it))
+                        Result.success(snapshot(icon = "13d", conditionId = 600).copy(place = it))
                     },
                     now = { start },
                 )
