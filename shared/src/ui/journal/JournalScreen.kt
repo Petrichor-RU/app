@@ -44,7 +44,7 @@ import nl.petrichor.app.ui.BoxMessage
 import kotlin.time.Clock
 
 /**
- * Journal tab (plan section 5.1): lists logged outfits newest-first, FAB to log an outfit,
+ * Journal tab: lists logged outfits newest-first, FAB to log an outfit,
  * tap opens the detail sheet, and consumes [pendingAction] from the JournalActionBus
  * (notification deep links).
  */

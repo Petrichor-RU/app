@@ -7,7 +7,7 @@ import platform.UserNotifications.UNNotificationRequest
 import platform.UserNotifications.UNUserNotificationCenter
 
 /**
- * iOS implementation (plan section 2.2), written blind (no macOS toolchain here): two
+ * iOS implementation, written blind (no macOS toolchain here): two
  * repeating UNCalendarNotificationTrigger requests at the reminder hours. Tapping a
  * notification is delivered to the UNUserNotificationCenterDelegate installed in
  * iosApp's ViewController, which forwards the `action` userInfo entry to the JournalActionBus.

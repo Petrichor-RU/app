@@ -11,7 +11,7 @@ enum class CoverageZone {
     LOWER,
     FEET,
 
-    // Display-only group zones (plan section 6.5): a full-body piece forms its own group and
+    // Display-only group zones: a full-body piece forms its own group and
     // accessories are shown separately. Neither carries warmth on its own.
     FULL_BODY,
     ACCESSORIES,
@@ -28,7 +28,7 @@ fun groupZoneFor(supertype: ClothingSupertype): CoverageZone =
         ClothingSupertype.ACCESSORIES -> CoverageZone.ACCESSORIES
     }
 
-/** Fixed display order and labels for outfit groups (plan section 6.5). */
+/** Fixed display order and labels for outfit groups. */
 val groupDisplayOrder: List<CoverageZone> =
     listOf(
         CoverageZone.HEAD,
@@ -50,7 +50,7 @@ fun groupLabel(zone: CoverageZone): String =
     }
 
 /**
- * Warmth encoding for pieces, zones and outfit feature vectors (plan section 6.2).
+ * Warmth encoding for pieces, zones and outfit feature vectors.
  *
  * All warmth weights below are tunable constants; they live in this one file on purpose.
  */

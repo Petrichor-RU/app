@@ -10,7 +10,7 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
 /**
- * Wall-clock times for the two daily journal reminders (plan section 2.2): 08:00 to log the
+ * Wall-clock times for the two daily journal reminders: 08:00 to log the
  * outfit, 20:00 for the evening survey.
  */
 object ReminderTimes {

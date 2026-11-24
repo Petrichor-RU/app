@@ -33,7 +33,7 @@ import nl.petrichor.app.data.media.MediaStorage
 fun AddOutfitDialog(params: AddOutfitDialogParams) {
     val state = remember { AddOutfitFormState(params) }
 
-    // ImagePickerKMP rotate/crop is disabled everywhere (plan decision 20).
+    // ImagePickerKMP rotate/crop is disabled everywhere.
     val imagePicker =
         rememberImagePickerKMP(
             ImagePickerKMPConfig(

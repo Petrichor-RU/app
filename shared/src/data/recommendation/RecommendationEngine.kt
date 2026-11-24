@@ -8,7 +8,7 @@ import nl.petrichor.app.data.wardrobe.ClothingType
 import kotlin.random.Random
 import kotlin.time.Clock
 
-/** Scoring mode derived from the amount of survey data (plan section 6.4). */
+/** Scoring mode derived from the amount of survey data. */
 enum class RecommendationMode {
     MODEL,
     HEURISTIC,
@@ -31,7 +31,7 @@ data class OutfitCandidate(
     val source: RecommendationSource,
 )
 
-/** A labeled display group of pieces (plan section 6.5). */
+/** A labeled display group of pieces. */
 data class OutfitGroup(
     val zone: CoverageZone,
     val label: String,
@@ -53,7 +53,7 @@ data class RecommendationInput(
 )
 
 /**
- * Zone-based recommendation engine (plan section 6): builds candidates from logged outfits
+ * Zone-based recommendation engine: builds candidates from logged outfits
  * (with laundry replacements) and constructed combinations, scores them with the active mode
  * and returns the top few.
  */
@@ -126,7 +126,7 @@ object RecommendationEngine {
             .map { zone -> OutfitGroup(zone = zone, label = groupLabel(zone), pieces = byZone[zone].orEmpty()) }
     }
 
-    /** Textual temperature band for fallback mode (plan section 6.4). */
+    /** Textual temperature band for fallback mode. */
     fun bandSuggestion(tempC: Double?): String =
         when {
             tempC == null -> "No forecast available — check the Weather tab"

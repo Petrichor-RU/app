@@ -30,7 +30,7 @@ import nl.petrichor.app.data.outfit.WarmthVerdict
 import kotlin.math.roundToInt
 
 /**
- * Evening survey (plan section 5.4): two required questions, feeling score 1-5 and warmth
+ * Evening survey: two required questions, feeling score 1-5 and warmth
  * verdict. Submit is disabled until both are answered. With [entry] == null the empty-state
  * variant is shown (20:00 deep link when nothing was logged today): "Log outfit first".
  */

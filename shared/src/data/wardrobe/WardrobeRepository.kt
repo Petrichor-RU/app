@@ -73,7 +73,7 @@ class WardrobeRepository(
         }
 
     /**
-     * Archive instead of delete (plan decision 13): a piece linked to at least one journal entry is
+     * Archive instead of delete: a piece linked to at least one journal entry is
      * soft-deleted silently (its image file is kept, the journal still displays it); an unlinked
      * piece is hard-deleted together with its image.
      */

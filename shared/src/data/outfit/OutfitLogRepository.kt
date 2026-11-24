@@ -34,7 +34,7 @@ internal val outfitAppScope = CoroutineScope(SupervisorJob() + Dispatchers.Defau
 private const val DAY_MS = 24L * 60 * 60 * 1000
 
 /**
- * Repository for the outfit journal (plan section 3.4). Business boundary around [OutfitDao]:
+ * Repository for the outfit journal. Business boundary around [OutfitDao]:
  * stamps creation timestamps, computes laundry-until values, persists entries and piece links
  * in a transaction, and triggers background model retraining after survey changes.
  */

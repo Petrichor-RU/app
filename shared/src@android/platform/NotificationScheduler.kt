@@ -21,7 +21,7 @@ import kotlin.time.Clock
 import kotlin.time.Instant
 
 /**
- * Android implementation (plan section 2.2): two unique 24h [PeriodicWorkRequest]s whose
+ * Android implementation: two unique 24h [PeriodicWorkRequest]s whose
  * initial delay is the next wall-clock occurrence of the reminder hour (see [ReminderTimes]).
  * The worker posts a notification whose tap opens MainActivity with a `journal_action` extra.
  */

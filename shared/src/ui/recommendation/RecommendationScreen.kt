@@ -67,7 +67,7 @@ private class RecommendationController : ViewModel() {
 }
 
 /**
- * Suggestions tab (plan section 7): the calendar stays on top and the screen opens scrolled
+ * Suggestions tab: the calendar stays on top and the screen opens scrolled
  * below it to the top-3 outfit candidates in a horizontal pager. Weather and location name come
  * from the app-shell-shared [AppWeatherState] (loaded once per place in App.kt) rather than a
  * private request, so this tab never issues its own weather load.

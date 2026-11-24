@@ -29,7 +29,7 @@ import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.ui.longLabel
 
 /**
- * Full-screen overlay for a journal entry (plan section 5.3), reusing the visual pattern of
+ * Full-screen overlay for a journal entry, reusing the visual pattern of
  * ClothingDetailScreen: hero selfie (or placeholder), date, notes, piece chips (archived
  * pieces marked), weather snapshot, survey section, and an overflow menu with laundry/edit/delete.
  * The scrollable body is delegated to [OutfitDetailContent], which switches to a two-column layout

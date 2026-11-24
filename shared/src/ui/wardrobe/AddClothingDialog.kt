@@ -81,7 +81,7 @@ fun AddClothingDialog(
         rememberImagePickerKMP(
             ImagePickerKMPConfig(
                 galleryConfig = GalleryConfig(allowMultiple = false),
-                // ImagePickerKMP rotate/crop is disabled everywhere (plan decision 20).
+                // ImagePickerKMP rotate/crop is disabled everywhere.
                 cropConfig =
                     CropConfig(
                         enabled = false,

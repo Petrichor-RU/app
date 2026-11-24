@@ -10,7 +10,7 @@ enum class JournalPendingAction {
 }
 
 /**
- * Deep-link action bus for notification entry points (plan section 2.2). Platform entry points
+ * Deep-link action bus for notification entry points. Platform entry points
  * (Android MainActivity, iOS notification delegate) call [request] before/at composition; the
  * common app shell animates to the Journal tab and hands the action to [JournalScreen].
  */

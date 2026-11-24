@@ -36,7 +36,7 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.ui.wardrobe.ClothingCard
 
 /**
- * One labeled horizontal swipeable row of ClothingCards for an outfit group (plan section 7.2).
+ * One labeled horizontal swipeable row of ClothingCards for an outfit group.
  * Each card has a laundry action that regenerates the suggestions.
  */
 @Composable

@@ -9,7 +9,7 @@ import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 
 /**
- * Candidate construction (plan section 6.3): logged outfits (with same-zone laundry
+ * Candidate construction: logged outfits (with same-zone laundry
  * replacements) plus constructed per-zone combinations. Split outfits and full-body outfits
  * are mutually exclusive; outer layers are only offered below 14 °C.
  */

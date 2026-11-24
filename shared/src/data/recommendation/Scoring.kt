@@ -7,7 +7,7 @@ import kotlin.math.abs
 import kotlin.math.min
 
 /**
- * Candidate scoring (plan section 6.4): MODEL predicts the 1-5 feeling score with the trained
+ * Candidate scoring: MODEL predicts the 1-5 feeling score with the trained
  * linear regression, HEURISTIC compares actual vs ideal warmth, FALLBACK ranks logged outfits
  * above the single constructed one.
  */

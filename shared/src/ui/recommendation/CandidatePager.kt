@@ -38,7 +38,7 @@ import nl.petrichor.app.ui.BoxMessage
 import nl.petrichor.app.ui.longLabel
 
 /**
- * Horizontal pager over the top-3 outfit candidates (plan section 7.1). Each page shows the
+ * Horizontal pager over the top-3 outfit candidates. Each page shows the
  * dynamic zone groups as swipeable card rows, a selfie card for logged selfie-only outfits, or
  * the textual fallback suggestion.
  */

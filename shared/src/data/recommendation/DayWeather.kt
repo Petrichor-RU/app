@@ -10,7 +10,7 @@ internal data class DayWeather(
     val maxTemperature: Int? = null,
 )
 
-/** Mean temperature of a forecast day ((min + max) / 2, plan section 6.2); null without data. */
+/** Mean temperature of a forecast day ((min + max) / 2); null without data. */
 internal val DayWeather.tempC: Double?
     get() =
         when {

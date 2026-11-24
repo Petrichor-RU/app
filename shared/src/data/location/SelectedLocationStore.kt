@@ -12,7 +12,7 @@ import nl.petrichor.app.data.weather.Place
 private val selectedPlaceKey = stringPreferencesKey("selected_place")
 
 /**
- * Persisted, shared selected location (plan section 8, decision 19): both the Weather tab and
+ * Persisted, shared selected location: both the Weather tab and
  * the Suggestions tab use this place. `null` means "use current location".
  * Stored as one JSON preference key in the existing saved_locations DataStore.
  */
