@@ -211,7 +211,7 @@ internal object EvaluationHarness {
 
     /**
      * Measures Kalman + ADF model update latency and 120-candidate scoring latency at arbitrary
-     * feature dimension `d` (used for Phase 3 runtime budget verification at `d = 16` and `d = 32`).
+     * feature dimension `d` (used for runtime budget verification at `d = 16` and `d = 32`).
      */
     fun benchmarkDimensionLatency(
         dimension: Int,
@@ -903,7 +903,7 @@ internal object SyntheticPersonas {
 
 /**
  * Legacy 8-feature additive linear regression retained strictly inside test code to measure
- * ablation gains of the Phase 2 interaction ridge baseline.
+ * ablation gains of the interaction ridge baseline.
  */
 private object LegacyAdditiveModel {
     private const val LAMBDA = 0.5

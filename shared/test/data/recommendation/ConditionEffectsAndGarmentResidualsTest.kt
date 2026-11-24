@@ -20,7 +20,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class Phase4ConditionAndGarmentTest {
+class ConditionEffectsAndGarmentResidualsTest {
     private val baseDate = LocalDate(2026, 5, 1)
     private val teeType = ClothingType(id = 1L, name = "T-Shirts", supertype = ClothingSupertype.UPPER_BODY)
     private val shirtType = ClothingType(id = 2L, name = "Shirts", supertype = ClothingSupertype.UPPER_BODY)

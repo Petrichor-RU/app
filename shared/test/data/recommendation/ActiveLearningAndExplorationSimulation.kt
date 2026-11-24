@@ -41,11 +41,11 @@ internal data class BanditSimulationResult(
 )
 
 /**
- * Deterministic Phase 5 offline simulations comparing:
+ * Deterministic offline simulations comparing:
  * 1. Random vs selective active querying under a fixed question budget.
  * 2. Greedy vs constrained Thompson slates (measuring regret, complaint rate, safety, and IPS).
  */
-internal object Phase5SimulationSupport {
+internal object ActiveLearningAndExplorationSimulation {
     private val baseDate = LocalDate(2026, 9, 1)
     private val teeType = ClothingType(id = 1L, name = "T-Shirts", supertype = ClothingSupertype.UPPER_BODY)
     private val shirtType = ClothingType(id = 2L, name = "Shirts", supertype = ClothingSupertype.UPPER_BODY)
@@ -539,7 +539,7 @@ internal object Phase5SimulationSupport {
         thumbnailPath = "",
     )
 
-    @Suppress("LongParameterList") // concise observation builder for Phase 5 simulation
+    @Suppress("LongParameterList") // concise observation builder for offline simulation
     private fun entryWithPieces(
         id: Long,
         dayOffset: Int,
