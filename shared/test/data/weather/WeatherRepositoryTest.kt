@@ -16,6 +16,7 @@ class WeatherRepositoryTest {
         assertEquals(32400L, snapshot.utcOffsetSeconds)
         assertTrue(snapshot.utcOffsetKnown)
         assertEquals(14, snapshot.temperature)
+        assertEquals(500, snapshot.conditionId)
         assertEquals(14.4, snapshot.temperatureC)
         assertEquals(4.2, snapshot.windSpeedMs)
         assertEquals(1.5, snapshot.rainVolumeMm)
@@ -26,6 +27,7 @@ class WeatherRepositoryTest {
         assertEquals("2026-11-12", day1.label)
         assertEquals(13, day1.min)
         assertEquals(15, day1.max)
+        assertEquals(800, day1.conditionId)
 
         val day2 = snapshot.forecast[1]
         assertEquals("2026-11-13", day2.label)
@@ -38,15 +40,16 @@ class WeatherRepositoryTest {
         assertEquals(55, day2.humidity)
         assertEquals(0.85, assertNotNull(day2.precipitationProbability), 1e-9)
         assertEquals(3.0, assertNotNull(day2.rainVolumeMm), 1e-9)
-        // Noon daytime icon (12:00 JST) is chosen over 03:00 JST night icon.
+        // Noon daytime icon and condition code (12:00 JST) are chosen over 03:00 JST night entry.
         assertEquals("10d", day2.icon)
+        assertEquals(501, day2.conditionId)
     }
 
     private fun currentWeatherJson(): String =
         """
         {
           "dt": 1794484800,
-          "weather": [{"description": "light rain", "icon": "10n"}],
+          "weather": [{"id": 500, "description": "light rain", "icon": "10n"}],
           "main": {"temp": 14.4, "feels_like": 13.1, "humidity": 78},
           "wind": {"speed": 4.2},
           "rain": {"1h": 1.5}
@@ -63,21 +66,21 @@ class WeatherRepositoryTest {
             {
               "dt": 1794484800,
               "main": {"temp": 14.0, "feels_like": 13.0, "temp_min": 13.0, "temp_max": 15.0, "humidity": 75},
-              "weather": [{"description": "clear sky", "icon": "01n"}],
+              "weather": [{"id": 800, "description": "clear sky", "icon": "01n"}],
               "wind": {"speed": 3.0},
               "pop": 0.1
             },
             {
               "dt": 1794506400,
               "main": {"temp": 4.0, "feels_like": 2.0, "temp_min": 3.0, "temp_max": 5.0, "humidity": 90},
-              "weather": [{"description": "clear sky", "icon": "01n"}],
+              "weather": [{"id": 800, "description": "clear sky", "icon": "01n"}],
               "wind": {"speed": 10.0},
               "pop": 0.0
             },
             {
               "dt": 1794538800,
               "main": {"temp": 18.0, "feels_like": 17.0, "temp_min": 17.0, "temp_max": 19.0, "humidity": 60},
-              "weather": [{"description": "moderate rain", "icon": "10d"}],
+              "weather": [{"id": 501, "description": "moderate rain", "icon": "10d"}],
               "wind": {"speed": 4.0},
               "pop": 0.85,
               "rain": {"3h": 2.4}
@@ -85,7 +88,7 @@ class WeatherRepositoryTest {
             {
               "dt": 1794549600,
               "main": {"temp": 20.0, "feels_like": 19.0, "temp_min": 19.0, "temp_max": 22.0, "humidity": 50},
-              "weather": [{"description": "few clouds", "icon": "02d"}],
+              "weather": [{"id": 801, "description": "few clouds", "icon": "02d"}],
               "wind": {"speed": 6.0},
               "pop": 0.3,
               "rain": {"3h": 0.6}
@@ -102,7 +105,7 @@ class WeatherRepositoryTest {
                 OpenWeatherForecastItemDto(
                     dt = 1794452400L,
                     main = OpenWeatherMainDto(temp = 6.0, feelsLike = 4.0, tempMin = 5.0, tempMax = 7.0, humidity = 80),
-                    weather = listOf(OpenWeatherConditionDto(description = "clouds", icon = "03n")),
+                    weather = listOf(OpenWeatherConditionDto(id = 802, description = "clouds", icon = "03n")),
                     wind = OpenWeatherWindDto(speed = 3.5),
                     pop = 0.2,
                 ),
@@ -116,5 +119,6 @@ class WeatherRepositoryTest {
         assertEquals(4.0, assertNotNull(day.feelsLikeC), 1e-9)
         assertEquals(3.5, assertNotNull(day.windSpeedMs), 1e-9)
         assertEquals("03n", day.icon)
+        assertEquals(802, day.conditionId)
     }
 }

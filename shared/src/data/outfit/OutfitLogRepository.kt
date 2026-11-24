@@ -31,8 +31,8 @@ private const val DAY_MS = 24L * 60 * 60 * 1000
 
 /**
  * Repository for the outfit journal. Business boundary around [OutfitDao]:
- * stamps creation timestamps, computes laundry-until values, persists entries and piece links
- * in a transaction, and triggers background model retraining after survey changes.
+ * stamps creation timestamps, computes laundry-until values, persists entries and piece links,
+ * and notifies [RecommendationTrainingCoordinator] after survey, outfit-edit, or delete changes.
  */
 @Suppress("TooManyFunctions") // repository business boundary around the DAOs
 class OutfitLogRepository(

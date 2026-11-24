@@ -206,12 +206,13 @@ class RecommendationContentTest {
             feelsLike = 14,
             description = "Clear",
             icon = "01d",
+            conditionId = 800,
             humidity = 60,
             windSpeed = 3,
             forecast =
                 listOf(
-                    ForecastDay("2026-06-10", min = 10, max = 18, icon = "01d"),
-                    ForecastDay("2026-06-11", min = 14, max = 23, icon = "01d"),
+                    ForecastDay("2026-06-10", min = 10, max = 18, icon = "01d", conditionId = 800),
+                    ForecastDay("2026-06-11", min = 14, max = 23, icon = "01d", conditionId = 800),
                 ),
         )
 

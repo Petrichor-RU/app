@@ -1,8 +1,8 @@
 package nl.petrichor.app.data.recommendation
 
 import kotlinx.datetime.LocalDate
-import nl.petrichor.app.data.outfit.isRainyWeather
 import nl.petrichor.app.data.weather.ForecastDay
+import nl.petrichor.app.data.weather.WeatherConditions
 import nl.petrichor.app.data.weather.WeatherSnapshot
 
 private const val RAIN_POP_THRESHOLD = 0.5
@@ -24,7 +24,7 @@ internal data class DayWeather(
     val locationName: String? = null,
 )
 
-/** Mean temperature of a forecast day ((min + max) / 2, plan section 6.2); null without data. */
+/** Mean temperature of a forecast day ((min + max) / 2); null without data. */
 internal val DayWeather.tempC: Double?
     get() =
         when {
@@ -62,7 +62,9 @@ private fun todayDayWeather(
 ): DayWeather {
     val pop = forecastDay?.precipitationProbability
     val rainMm = snapshot.rainVolumeMm ?: forecastDay?.rainVolumeMm
-    val rainy = isRainyWeather(snapshot.description, snapshot.icon) || isForecastRainy(forecastDay, pop, rainMm)
+    val rainy =
+        WeatherConditions.isRainy(snapshot.description, snapshot.conditionId, snapshot.icon) ||
+            isForecastRainy(forecastDay, pop, rainMm)
     return DayWeather(
         isRainy = rainy,
         minTemperature = minOf(forecastDay?.min ?: snapshot.temperature, snapshot.temperature),
@@ -108,6 +110,6 @@ private fun isForecastRainy(
     pop: Double?,
     rainMm: Double?,
 ): Boolean =
-    isRainyWeather(null, forecastDay?.icon) ||
+    WeatherConditions.isRainy(null, forecastDay?.conditionId, forecastDay?.icon) ||
         (pop != null && pop >= RAIN_POP_THRESHOLD) ||
         (rainMm != null && rainMm >= RAIN_MM_THRESHOLD)

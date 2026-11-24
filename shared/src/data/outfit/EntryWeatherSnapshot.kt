@@ -5,7 +5,7 @@ import nl.petrichor.app.data.recommendation.dayWeatherFor
 import nl.petrichor.app.data.weather.WeatherSnapshot
 
 /**
- * Weather fields snapshotted onto an [OutfitEntry] at logging time (plan section 3.5), so the
+ * Weather fields snapshotted onto an [OutfitEntry] at logging time, so the
  * model can train on the conditions the outfit was actually worn in.
  */
 data class EntryWeatherSnapshot(

@@ -55,13 +55,14 @@ private fun aggregateForecastDay(
     val humidityValues = windowItems.mapNotNull { it.main.humidity }
     val popValues = windowItems.mapNotNull { it.pop }
     val rainSum = windowItems.sumOf { it.rain?.threeHours ?: 0.0 }
-    val representativeIcon = pickRepresentativeIcon(windowEntries)
+    val representativeCondition = pickRepresentativeCondition(windowEntries)
 
     return ForecastDay(
         label = label,
         min = minTemp,
         max = maxTemp,
-        icon = representativeIcon,
+        icon = representativeCondition?.icon.orEmpty(),
+        conditionId = representativeCondition?.id ?: 0,
         feelsLikeC = feelsLikeValues.takeIf { it.isNotEmpty() }?.average(),
         windSpeedMs = windValues.takeIf { it.isNotEmpty() }?.average(),
         humidity = humidityValues.takeIf { it.isNotEmpty() }?.average()?.roundToInt(),
@@ -70,11 +71,9 @@ private fun aggregateForecastDay(
     )
 }
 
-private fun pickRepresentativeIcon(windowEntries: List<Pair<OpenWeatherForecastItemDto, LocalDateTime>>): String =
+private fun pickRepresentativeCondition(windowEntries: List<Pair<OpenWeatherForecastItemDto, LocalDateTime>>): OpenWeatherConditionDto? =
     windowEntries
         .minByOrNull { (_, dt) -> abs(dt.hour - REPRESENTATIVE_NOON_HOUR) }
         ?.first
         ?.weather
         ?.firstOrNull()
-        ?.icon
-        .orEmpty()

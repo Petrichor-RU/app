@@ -150,12 +150,13 @@ class Phase5ActiveLearningAndExplorationTest {
             feelsLike = 10,
             description = "Clouds",
             icon = "04d",
+            conditionId = 803,
             humidity = 75,
             windSpeed = 4,
             forecast =
                 listOf(
-                    ForecastDay("Today", min = 8, max = 14, icon = "04d"),
-                    ForecastDay("Tomorrow", min = 9, max = 15, icon = "01d"),
+                    ForecastDay("Today", min = 8, max = 14, icon = "04d", conditionId = 803),
+                    ForecastDay("Tomorrow", min = 9, max = 15, icon = "01d", conditionId = 800),
                 ),
             temperatureC = 11.0,
             feelsLikeC = 10.0,

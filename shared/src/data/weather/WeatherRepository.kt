@@ -68,6 +68,7 @@ class WeatherRepository(
                     .orEmpty()
                     .replaceFirstChar { it.uppercase() },
             icon = currentCondition?.icon.orEmpty(),
+            conditionId = currentCondition?.id ?: 0,
             humidity = current.main.humidity ?: 0,
             windSpeed = windSpeedMs.roundToInt(),
             forecast = groupForecastByLocalDate(forecast.list, utcOffsetSeconds),

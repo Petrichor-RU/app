@@ -45,6 +45,7 @@ internal data class OpenWeatherMainDto(
 
 @Serializable
 internal data class OpenWeatherConditionDto(
+    val id: Int = 0,
     val description: String = "",
     val icon: String = "",
 )

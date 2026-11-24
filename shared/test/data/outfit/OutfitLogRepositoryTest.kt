@@ -234,6 +234,26 @@ class OutfitLogRepositoryTest {
         assertFalse(snapshot.isRainy)
     }
 
+    @Test
+    fun `weather snapshot treats freezing rain conditionId 511 as rainy even with snow icon`() {
+        val today = LocalDate(2026, 11, 12)
+        val future = LocalDate(2026, 11, 13)
+        val weather =
+            weather().copy(
+                description = "Overcast clouds",
+                icon = "04d",
+                conditionId = 804,
+                forecast =
+                    listOf(
+                        ForecastDay("2026-11-12", min = 1, max = 4, icon = "04d", conditionId = 804),
+                        ForecastDay("2026-11-13", min = -1, max = 2, icon = "13d", conditionId = 511),
+                    ),
+            )
+
+        assertFalse(buildEntryWeatherSnapshot(weather, today, today).isRainy)
+        assertTrue(buildEntryWeatherSnapshot(weather, future, today).isRainy)
+    }
+
     private fun entry(createdAtEpochMs: Long) =
         OutfitEntry(
             id = 0,

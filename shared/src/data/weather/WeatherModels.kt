@@ -45,6 +45,8 @@ data class ForecastDay(
     val min: Int,
     val max: Int,
     val icon: String,
+    /** OpenWeatherMap weather condition code (`weather[].id`, first entry is primary); see [WeatherConditions]. */
+    val conditionId: Int = 0,
     val feelsLikeC: Double? = null,
     val windSpeedMs: Double? = null,
     val humidity: Int? = null,
