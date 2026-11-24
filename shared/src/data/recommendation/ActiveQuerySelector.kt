@@ -117,8 +117,9 @@ internal object ActiveQuerySelector {
             )
         }
         val entry = item.entry
-        val raw =
-            FeatureExtractor.extractRaw(
+        val extracted =
+            FeatureExtractor.extractForModel(
+                model = model,
                 tempC = tempC,
                 isRainy = entry.isRainy,
                 pieces = item.pieces,
@@ -127,9 +128,14 @@ internal object ActiveQuerySelector {
                 precipitationProbability = entry.precipitationProbability,
                 rainVolumeMm = entry.rainVolumeMm,
             )
-        val features = FeatureExtractor.buildFeatures(raw, model.scaler, item.pieces, model.activePieceIndexById)
-        val unseen = FeatureExtractor.countUnseenPieces(item.pieces, model.activePieceIndexById)
-        val comfort = BayesianComfortModel.predict(model.ratingPosterior, model.thermalPosterior, raw, features, unseen)
+        val comfort =
+            BayesianComfortModel.predict(
+                model.ratingPosterior,
+                model.thermalPosterior,
+                extracted.raw,
+                extracted.features,
+                extracted.unseenPieceIds.size,
+            )
         val ratingVar = comfort.rating.epistemicStd * comfort.rating.epistemicStd / BayesianRatingModel.OFFSET_PRIOR_VARIANCE
         val thermalVar = comfort.thermal.epistemicStd * comfort.thermal.epistemicStd
         val reducibleVariance = 0.5 * (ratingVar + thermalVar)

@@ -3,6 +3,7 @@ package nl.petrichor.app.data.recommendation
 import nl.petrichor.app.data.outfit.WarmthVerdict
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
+import org.jetbrains.kotlinx.multik.api.linalg.dot
 import org.jetbrains.kotlinx.multik.api.mk
 import org.jetbrains.kotlinx.multik.api.ndarray
 import org.jetbrains.kotlinx.multik.api.zeros
@@ -59,19 +60,16 @@ internal object BayesianThermalModel {
     private const val MIN_VARIANCE = 1e-9
     private const val TAIL_GUARD_Z = 6.0
     private const val MAX_DELTA2 = 0.999999
-    private const val FIRST_INTERACTION_INDEX = 7
-    private const val LAST_CORE_INTERACTION_INDEX = 9
 
     fun defaultPriorVariances(dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT): DoubleArray =
-        DoubleArray(dimension) { index ->
-            when {
-                index == 0 -> OFFSET_PRIOR_VARIANCE
-                index < FIRST_INTERACTION_INDEX -> LINEAR_PRIOR_VARIANCE
-                index <= LAST_CORE_INTERACTION_INDEX -> INTERACTION_PRIOR_VARIANCE
-                index < FeatureExtractor.CORE_FEATURE_COUNT -> CONDITION_PRIOR_VARIANCE
-                else -> GARMENT_PRIOR_VARIANCE
-            }
-        }
+        buildPriorVariances(
+            dimension = dimension,
+            offsetVariance = OFFSET_PRIOR_VARIANCE,
+            linearVariance = LINEAR_PRIOR_VARIANCE,
+            interactionVariance = INTERACTION_PRIOR_VARIANCE,
+            conditionVariance = CONDITION_PRIOR_VARIANCE,
+            garmentVariance = GARMENT_PRIOR_VARIANCE,
+        )
 
     fun prior(
         dimension: Int = FeatureExtractor.CORE_FEATURE_COUNT,
@@ -83,7 +81,7 @@ internal object BayesianThermalModel {
         }
         return ThermalPosterior(
             mean = mk.zeros<Double>(dimension),
-            covariance = MultikOps.diagonalMatrix(priorVariances),
+            covariance = StatsFacade.diagonalMatrix(priorVariances),
             thresholdTau = thresholdTau,
         )
     }
@@ -109,10 +107,10 @@ internal object BayesianThermalModel {
 
         val noiseVariance = observationVariance.coerceAtLeast(1.0)
         val x = mk.ndarray(features)
-        val pX = StatsFacade.matVec(posterior.covariance, x)
-        val sSquared = (noiseVariance + StatsFacade.dot(x, pX)).coerceAtLeast(noiseVariance)
+        val pX = mk.linalg.dot(posterior.covariance, x)
+        val sSquared = (noiseVariance + mk.linalg.dot(x, pX)).coerceAtLeast(noiseVariance)
         val s = sqrt(sSquared)
-        val mu = priorSensation(raw) + StatsFacade.dot(x, posterior.mean)
+        val mu = priorSensation(raw) + mk.linalg.dot(x, posterior.mean)
 
         val (delta1, delta2) = truncatedNormalDeltaMoments(verdict, mu, s, posterior.thresholdTau)
         val meanScale = delta1 / s
@@ -125,8 +123,7 @@ internal object BayesianThermalModel {
                 rawCov[i, j] = posterior.covariance[i, j] - covScale * pX[i] * pX[j]
             }
         }
-        val nextCov = MultikOps.symmetriseAndFloor(rawCov, MIN_VARIANCE)
-        return posterior.copy(mean = nextMean, covariance = nextCov)
+        return posterior.copy(mean = nextMean, covariance = StatsFacade.symmetriseAndFloor(rawCov, MIN_VARIANCE))
     }
 
     fun fitReplay(
@@ -150,8 +147,8 @@ internal object BayesianThermalModel {
         garmentPriorVariance: Double = GARMENT_PRIOR_VARIANCE,
     ): ThermalProbabilities {
         val x = mk.ndarray(features)
-        val mu = priorSensation(raw) + StatsFacade.dot(x, posterior.mean)
-        val activeVar = MultikOps.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
+        val mu = priorSensation(raw) + mk.linalg.dot(x, posterior.mean)
+        val activeVar = StatsFacade.quadForm(x, posterior.covariance).coerceAtLeast(0.0)
         val epistemicVar = (activeVar + unseenPieceCount * garmentPriorVariance).coerceAtLeast(0.0)
         val s = sqrt(1.0 + epistemicVar)
         val tau = posterior.thresholdTau
@@ -160,14 +157,11 @@ internal object BayesianThermalModel {
 
         val cdfCold = StatsFacade.standardNormalCdf(zCold).coerceIn(0.0, 1.0)
         val cdfWarm = StatsFacade.standardNormalCdf(zWarm).coerceIn(cdfCold, 1.0)
-        val pCold = cdfCold
-        val pPerfect = (cdfWarm - cdfCold).coerceIn(0.0, 1.0)
-        val pWarm = (1.0 - cdfWarm).coerceIn(0.0, 1.0)
 
         return ThermalProbabilities(
-            tooCold = pCold,
-            perfect = pPerfect,
-            tooWarm = pWarm,
+            tooCold = cdfCold,
+            perfect = (cdfWarm - cdfCold).coerceIn(0.0, 1.0),
+            tooWarm = (1.0 - cdfWarm).coerceIn(0.0, 1.0),
             latentMean = mu,
             latentStd = s,
             epistemicStd = sqrt(epistemicVar),
@@ -184,19 +178,18 @@ internal object BayesianThermalModel {
         precipitationProbability: Double? = null,
         rainVolumeMm: Double? = null,
     ): ThermalProbabilities {
-        val raw =
-            FeatureExtractor.extractRaw(
-                tempC = tempC,
-                isRainy = isRainy,
-                pieces = pieces,
-                typeById = typeById,
-                windSpeedMs = windSpeedMs,
-                precipitationProbability = precipitationProbability,
-                rainVolumeMm = rainVolumeMm,
+        val extracted =
+            FeatureExtractor.extractForModel(
+                model,
+                tempC,
+                isRainy,
+                pieces,
+                typeById,
+                windSpeedMs,
+                precipitationProbability,
+                rainVolumeMm,
             )
-        val features = FeatureExtractor.buildFeatures(raw, model.scaler, pieces, model.activePieceIndexById)
-        val unseenCount = FeatureExtractor.countUnseenPieces(pieces, model.activePieceIndexById)
-        return predict(model.thermalPosterior, raw, features, unseenPieceCount = unseenCount)
+        return predict(model.thermalPosterior, extracted.raw, extracted.features, unseenPieceCount = extracted.unseenPieceIds.size)
     }
 
     /**

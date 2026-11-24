@@ -433,7 +433,7 @@ class RecommendationEngineTest {
         schemaVersion: Int = ModelState.CURRENT_SCHEMA_VERSION,
     ): ModelState {
         val scaler = FeatureScaler(15.0, 5.0, 0.5, 0.25, 0.4, 0.2, 0.0, 1.0, 1.0, 0.5, 0.9, 0.4)
-        val artifact = RecommendationModelArtifact(scaler = scaler, ridgeWeights = weights)
+        val artifact = RecommendationModelArtifact(scaler = scaler, ratingMean = weights)
         return ModelState(
             schemaVersion = schemaVersion,
             dataRevision = 1L,

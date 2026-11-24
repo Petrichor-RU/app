@@ -12,6 +12,7 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
+import org.jetbrains.kotlinx.multik.api.linalg.dot
 import org.jetbrains.kotlinx.multik.api.mk
 import org.jetbrains.kotlinx.multik.api.ndarray
 import org.jetbrains.kotlinx.multik.api.zeros
@@ -367,7 +368,7 @@ internal object EvaluationHarness {
                 ) to score
             }
         if (samples.isEmpty()) return null
-        val artifact = RidgeRatingModel.fit(samples)
+        val artifact = RidgeRatingBaseline.fit(samples)
         val state =
             ModelState(
                 schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
@@ -498,7 +499,7 @@ internal object EvaluationHarness {
             } else {
                 val coeffs = modelRef as? DoubleArray
                 if (coeffs == null) {
-                    RidgeRatingModel.priorPrediction(raw)
+                    BayesianRatingModel.priorPrediction(raw)
                 } else {
                     LegacyAdditiveModel.predict(coeffs, tempC, isRainy, pieces, typeById)
                 }
@@ -507,7 +508,7 @@ internal object EvaluationHarness {
         return StepPrediction(score = score, ratingEstimate = score, thermal = probs)
     }
 
-    @Suppress("LongParameterList") // forwards weather context to RidgeRatingModel
+    @Suppress("LongParameterList") // forwards weather context to RidgeRatingBaseline
     private fun interactionRidgeStepPrediction(
         model: DecodedModel?,
         dataset: SyntheticDataset,
@@ -524,9 +525,9 @@ internal object EvaluationHarness {
     ): StepPrediction {
         val score =
             if (model == null) {
-                RidgeRatingModel.priorPrediction(raw)
+                BayesianRatingModel.priorPrediction(raw)
             } else {
-                RidgeRatingModel.predict(
+                RidgeRatingBaseline.predict(
                     model = model,
                     tempC = tempC,
                     isRainy = isRainy,
@@ -930,12 +931,12 @@ private object LegacyAdditiveModel {
             }
         }
         val xt = xMatrix.transpose()
-        val normal = StatsFacade.matMul(xt, xMatrix)
+        val normal = mk.linalg.dot(xt, xMatrix)
         for (i in 1 until d) {
             normal[i, i] = normal[i, i] + LAMBDA * n
         }
-        val rhs = StatsFacade.matVec(xt, mk.ndarray(yVec))
-        val solved = StatsFacade.solveLinearSystem(normal, rhs)
+        val rhs = mk.linalg.dot(xt, mk.ndarray(yVec))
+        val solved = RidgeRatingBaseline.solveLinearSystem(normal, rhs)
         return DoubleArray(d) { i -> solved[i] }
     }
 

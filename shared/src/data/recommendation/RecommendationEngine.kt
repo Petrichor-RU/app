@@ -65,9 +65,9 @@ internal data class RecommendationScoringContext(
 )
 
 /**
- * Zone-based recommendation engine: builds candidates from logged outfits (with score-driven
- * laundry replacements) and layered constructed combinations, scores them with the active mode
- * using a single pre-decoded model snapshot, and delegates slate selection to [ExplorationPolicy].
+ * Zone-based recommendation engine: builds candidates via [CandidateGenerator], scores them via
+ * [Scoring] using a single pre-decoded model snapshot, and delegates slate selection to
+ * [ExplorationPolicy].
  */
 object RecommendationEngine {
     const val MAX_CANDIDATES = 3
@@ -96,7 +96,7 @@ object RecommendationEngine {
     fun recommendSlate(input: RecommendationInput): RankedSlate {
         val context = prepareContext(input)
         val candidates = CandidateGenerator.generate(context)
-        val evaluated = candidates.map { candidate -> evaluateCandidate(context, candidate) }
+        val evaluated = candidates.map { candidate -> Scoring.evaluateCandidate(context, candidate) }
         return ExplorationPolicy.rankAndSelectSlate(context, evaluated)
     }
 
@@ -112,7 +112,7 @@ object RecommendationEngine {
         val evaluated = ArrayList<EvaluatedCandidate>(candidates.size)
         candidates.forEachIndexed { index, candidate ->
             if (index > 0 && index % SCORING_YIELD_INTERVAL == 0) yield()
-            evaluated += evaluateCandidate(context, candidate)
+            evaluated += Scoring.evaluateCandidate(context, candidate)
         }
         return ExplorationPolicy.rankAndSelectSlate(context, evaluated)
     }
@@ -128,68 +128,6 @@ object RecommendationEngine {
             }
         val pool = input.wardrobePieces.filter { !it.archived && it.laundryUntilEpochMs <= input.nowEpochMs }
         return RecommendationScoringContext(input, pool, typeById, mode, decodedModel)
-    }
-
-    private fun evaluateCandidate(
-        context: RecommendationScoringContext,
-        candidate: OutfitCandidate,
-    ): EvaluatedCandidate {
-        val input = context.input
-        val model = context.decodedModel
-        val tempC = input.tempC
-        val isSelfieOnly = candidate.pieces.isEmpty() && candidate.loggedEntry != null
-        val penalty = temperaturePenalty(candidate, tempC)
-        val useTrainedModel = model != null && tempC != null && !isSelfieOnly
-
-        if (useTrainedModel && context.mode != RecommendationMode.FALLBACK) {
-            val raw =
-                FeatureExtractor.extractRaw(
-                    tempC = tempC,
-                    isRainy = input.isRainy,
-                    pieces = candidate.pieces,
-                    typeById = context.typeById,
-                    windSpeedMs = input.windSpeedMs,
-                    precipitationProbability = input.precipitationProbability,
-                    rainVolumeMm = input.rainVolumeMm,
-                )
-            val features = FeatureExtractor.buildFeatures(raw, model.scaler, candidate.pieces, model.activePieceIndexById)
-            val unseenPieceIds =
-                candidate.pieces
-                    .asSequence()
-                    .map { it.id }
-                    .distinct()
-                    .filter { it !in model.activePieceIndexById }
-                    .toList()
-            val comfort =
-                BayesianComfortModel.predict(
-                    ratingPosterior = model.ratingPosterior,
-                    thermalPosterior = model.thermalPosterior,
-                    raw = raw,
-                    features = features,
-                    unseenPieceCount = unseenPieceIds.size,
-                )
-            val baseScore = if (input.surveyedCount >= 1) comfort.rating.mean - penalty else 0.0 - penalty
-            return EvaluatedCandidate(
-                candidate = candidate,
-                baseScore = baseScore,
-                tempPenalty = penalty,
-                raw = raw,
-                features = features,
-                unseenPieceIds = unseenPieceIds,
-                comfort = comfort,
-            )
-        }
-
-        val score = Scoring.scoreCandidate(input, candidate, context.typeById, context.mode, model)
-        return EvaluatedCandidate(
-            candidate = candidate,
-            baseScore = score,
-            tempPenalty = penalty,
-            raw = null,
-            features = null,
-            unseenPieceIds = emptyList(),
-            comfort = null,
-        )
     }
 
     /**

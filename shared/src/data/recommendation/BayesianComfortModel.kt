@@ -19,9 +19,9 @@ internal data class ComfortPrediction(
  * incremental updates on monotonic appends.
  */
 internal object BayesianComfortModel {
-    private const val ALPHA_THERMAL_WEIGHT = 0.45
+    internal const val ALPHA_THERMAL_WEIGHT = 0.45
+    internal const val RATING_SPAN = 4.0
     private const val BETA_RISK_PENALTY = 0.15
-    private const val RATING_SPAN = 4.0
 
     fun predict(
         ratingPosterior: RatingPosterior,
@@ -32,8 +32,7 @@ internal object BayesianComfortModel {
     ): ComfortPrediction {
         val rating = BayesianRatingModel.predict(ratingPosterior, raw, features, unseenPieceCount = unseenPieceCount)
         val thermal = BayesianThermalModel.predict(thermalPosterior, raw, features, unseenPieceCount = unseenPieceCount)
-        val combinedScore = combineScores(rating, thermal)
-        return ComfortPrediction(rating = rating, thermal = thermal, combinedScore = combinedScore)
+        return ComfortPrediction(rating = rating, thermal = thermal, combinedScore = combineScores(rating, thermal))
     }
 
     fun predict(
@@ -46,19 +45,24 @@ internal object BayesianComfortModel {
         precipitationProbability: Double? = null,
         rainVolumeMm: Double? = null,
     ): ComfortPrediction {
-        val raw =
-            FeatureExtractor.extractRaw(
-                tempC = tempC,
-                isRainy = isRainy,
-                pieces = pieces,
-                typeById = typeById,
-                windSpeedMs = windSpeedMs,
-                precipitationProbability = precipitationProbability,
-                rainVolumeMm = rainVolumeMm,
+        val extracted =
+            FeatureExtractor.extractForModel(
+                model,
+                tempC,
+                isRainy,
+                pieces,
+                typeById,
+                windSpeedMs,
+                precipitationProbability,
+                rainVolumeMm,
             )
-        val features = FeatureExtractor.buildFeatures(raw, model.scaler, pieces, model.activePieceIndexById)
-        val unseenCount = FeatureExtractor.countUnseenPieces(pieces, model.activePieceIndexById)
-        return predict(model.ratingPosterior, model.thermalPosterior, raw, features, unseenPieceCount = unseenCount)
+        return predict(
+            model.ratingPosterior,
+            model.thermalPosterior,
+            extracted.raw,
+            extracted.features,
+            unseenPieceCount = extracted.unseenPieceIds.size,
+        )
     }
 
     fun combineScores(
@@ -101,7 +105,7 @@ internal object BayesianModelTrainer {
                 }.sortedWith(chronologicalOrder)
         if (usable.isEmpty()) return null
 
-        val activePieceIds = ActivePieceSelector.selectActivePieceIds(usable)
+        val activePieceIds = FeatureExtractor.selectActivePieceIds(usable)
         val previousDecoded = DecodedModel.decode(snapshot.previousState)
         val artifact =
             if (canApplyIncrementalStep(previousDecoded, usable, typeById, activePieceIds)) {
@@ -137,40 +141,19 @@ internal object BayesianModelTrainer {
         typeById: Map<Long, ClothingType>,
     ): RecommendationModelArtifact {
         val newest = usable.last()
-        val entry = newest.entry
         val raw = extractTrainingRaw(newest, typeById)
-        val features = FeatureExtractor.buildFeatures(raw, previous.scaler, newest.pieces, previous.activePieceIndexById)
-        val deltaDays = (entry.wornOnDate.toEpochDays() - previous.lastObservationEpochDays).coerceAtLeast(0L).toDouble()
-        val residual = entry.surveyFeelingScore!!.toDouble() - RidgeRatingModel.priorPrediction(raw)
-        val obsWeight = contextObservationWeight(entry)
-
-        val nextRating =
-            BayesianRatingModel.update(
-                posterior = previous.ratingPosterior,
-                features = features,
-                residual = residual,
+        val deltaDays = (newest.entry.wornOnDate.toEpochDays() - previous.lastObservationEpochDays).coerceAtLeast(0L).toDouble()
+        val (nextRating, nextThermal) =
+            applyObservation(
+                rating = previous.ratingPosterior,
+                thermal = previous.thermalPosterior,
+                item = newest,
+                raw = raw,
+                scaler = previous.scaler,
+                activePieceIndexById = previous.activePieceIndexById,
                 deltaDays = deltaDays,
-                observationVariance = BayesianRatingModel.DEFAULT_OBSERVATION_VARIANCE / obsWeight,
             )
-        val nextThermal =
-            entry.surveyWarmthVerdict?.let { verdict ->
-                BayesianThermalModel.update(
-                    posterior = previous.thermalPosterior,
-                    raw = raw,
-                    features = features,
-                    verdict = verdict,
-                    observationVariance = 1.0 / obsWeight,
-                )
-            } ?: previous.thermalPosterior
-
-        return buildArtifact(
-            scaler = previous.scaler,
-            rating = nextRating,
-            thermal = nextThermal,
-            activePieceIds = previous.activePieceIds,
-            usable = usable,
-            typeById = typeById,
-        )
+        return buildArtifact(previous.scaler, nextRating, nextThermal, previous.activePieceIds, usable, typeById)
     }
 
     private fun replayFromPrior(
@@ -187,42 +170,51 @@ internal object BayesianModelTrainer {
 
         var previousDays: Long? = null
         usable.forEachIndexed { index, item ->
-            val raw = rawList[index]
-            val features = FeatureExtractor.buildFeatures(raw, scaler, item.pieces, activePieceIndexById)
             val currentDays = item.entry.wornOnDate.toEpochDays()
             val deltaDays = previousDays?.let { (currentDays - it).coerceAtLeast(0L).toDouble() } ?: 0.0
             previousDays = currentDays
-
-            val obsWeight = contextObservationWeight(item.entry)
-            val residual = item.entry.surveyFeelingScore!!.toDouble() - RidgeRatingModel.priorPrediction(raw)
-            rating =
-                BayesianRatingModel.update(
-                    posterior = rating,
-                    features = features,
-                    residual = residual,
-                    deltaDays = deltaDays,
-                    observationVariance = BayesianRatingModel.DEFAULT_OBSERVATION_VARIANCE / obsWeight,
-                )
-            item.entry.surveyWarmthVerdict?.let { verdict ->
-                thermal =
-                    BayesianThermalModel.update(
-                        posterior = thermal,
-                        raw = raw,
-                        features = features,
-                        verdict = verdict,
-                        observationVariance = 1.0 / obsWeight,
-                    )
-            }
+            val (nextRating, nextThermal) =
+                applyObservation(rating, thermal, item, rawList[index], scaler, activePieceIndexById, deltaDays)
+            rating = nextRating
+            thermal = nextThermal
         }
 
-        return buildArtifact(
-            scaler = scaler,
-            rating = rating,
-            thermal = thermal,
-            activePieceIds = activePieceIds,
-            usable = usable,
-            typeById = typeById,
-        )
+        return buildArtifact(scaler, rating, thermal, activePieceIds, usable, typeById)
+    }
+
+    @Suppress("LongParameterList") // single observation update shared by replay and incremental paths
+    private fun applyObservation(
+        rating: RatingPosterior,
+        thermal: ThermalPosterior,
+        item: OutfitEntryWithPieces,
+        raw: RawOutfitSignals,
+        scaler: FeatureScaler,
+        activePieceIndexById: Map<Long, Int>,
+        deltaDays: Double,
+    ): Pair<RatingPosterior, ThermalPosterior> {
+        val entry = item.entry
+        val features = FeatureExtractor.buildFeatures(raw, scaler, item.pieces, activePieceIndexById)
+        val obsWeight = contextObservationWeight(entry)
+        val residual = entry.surveyFeelingScore!!.toDouble() - BayesianRatingModel.priorPrediction(raw)
+        val nextRating =
+            BayesianRatingModel.update(
+                posterior = rating,
+                features = features,
+                residual = residual,
+                deltaDays = deltaDays,
+                observationVariance = BayesianRatingModel.DEFAULT_OBSERVATION_VARIANCE / obsWeight,
+            )
+        val nextThermal =
+            entry.surveyWarmthVerdict?.let { verdict ->
+                BayesianThermalModel.update(
+                    posterior = thermal,
+                    raw = raw,
+                    features = features,
+                    verdict = verdict,
+                    observationVariance = 1.0 / obsWeight,
+                )
+            } ?: thermal
+        return nextRating to nextThermal
     }
 
     private fun extractTrainingRaw(
@@ -251,13 +243,11 @@ internal object BayesianModelTrainer {
         usable: List<OutfitEntryWithPieces>,
         typeById: Map<Long, ClothingType>,
     ): RecommendationModelArtifact {
-        val meanList = DecodedModel.flattenVector(rating.mean)
         val last = usable.last()
         return RecommendationModelArtifact(
             featureSchemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
             scaler = scaler,
-            ridgeWeights = meanList,
-            ratingMean = meanList,
+            ratingMean = DecodedModel.flattenVector(rating.mean),
             ratingCovariance = DecodedModel.flattenMatrix(rating.covariance),
             thermalMean = DecodedModel.flattenVector(thermal.mean),
             thermalCovariance = DecodedModel.flattenMatrix(thermal.covariance),

@@ -20,8 +20,7 @@ import org.jetbrains.kotlinx.multik.ndarray.data.set
 data class RecommendationModelArtifact(
     val featureSchemaVersion: Int = FeatureExtractor.FEATURE_SCHEMA_VERSION,
     val scaler: FeatureScaler,
-    val ridgeWeights: List<Double>,
-    val ratingMean: List<Double> = ridgeWeights,
+    val ratingMean: List<Double>,
     val ratingCovariance: List<Double> = emptyList(),
     val thermalMean: List<Double> = emptyList(),
     val thermalCovariance: List<Double> = emptyList(),
@@ -54,9 +53,6 @@ internal class DecodedModel(
 ) {
     val activePieceIndexById: Map<Long, Int> =
         activePieceIds.withIndex().associate { (index, pieceId) -> pieceId to index }
-
-    val weights: D1Array<Double>
-        get() = ratingPosterior.mean
 
     val dimension: Int
         get() = ratingPosterior.dimension
@@ -140,7 +136,6 @@ internal class DecodedModel(
                 validPieces &&
                     artifact.featureSchemaVersion == FeatureExtractor.FEATURE_SCHEMA_VERSION &&
                     artifact.scaler.isValid() &&
-                    isValidVector(artifact.ridgeWeights, d) &&
                     isValidVector(artifact.ratingMean, d) &&
                     (artifact.thermalMean.isEmpty() || isValidVector(artifact.thermalMean, d))
             val validMatrices =

@@ -1,6 +1,7 @@
 package nl.petrichor.app.data.recommendation
 
 import kotlinx.serialization.Serializable
+import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.WeatherProtection
@@ -32,6 +33,12 @@ internal data class RawOutfitSignals(
     val hasWindShell: Boolean
         get() = windProtectionScore > 0.0
 }
+
+internal data class ExtractedModelFeatures(
+    val raw: RawOutfitSignals,
+    val features: DoubleArray,
+    val unseenPieceIds: List<Long>,
+)
 
 /**
  * Means and standard deviations estimated via `kstats` [org.oremif.kstats.descriptive.OnlineStatistics]
@@ -70,18 +77,6 @@ data class FeatureScaler(
                 layerCountUpperStd,
                 totalWarmthStd,
             ).all { it.isFinite() && it > 0.0 }
-
-    internal fun standardiseTemp(tempC: Double): Double = (tempC - tempCMean) / tempCStd
-
-    internal fun standardiseUpper(warmthUpper: Double): Double = (warmthUpper - warmthUpperMean) / warmthUpperStd
-
-    internal fun standardiseLower(warmthLower: Double): Double = (warmthLower - warmthLowerMean) / warmthLowerStd
-
-    internal fun standardiseHeadAndFeet(warmth: Double): Double = (warmth - warmthHeadAndFeetMean) / warmthHeadAndFeetStd
-
-    internal fun standardiseLayerCountUpper(layers: Double): Double = (layers - layerCountUpperMean) / layerCountUpperStd
-
-    internal fun standardiseTotalWarmth(totalWarmth: Double): Double = (totalWarmth - totalWarmthMean) / totalWarmthStd
 
     companion object {
         internal fun fit(samples: List<RawOutfitSignals>): FeatureScaler {
@@ -176,12 +171,12 @@ internal object FeatureExtractor {
         raw: RawOutfitSignals,
         scaler: FeatureScaler,
     ): DoubleArray {
-        val tempStd = scaler.standardiseTemp(raw.tempC)
-        val upperStd = scaler.standardiseUpper(raw.warmthUpper)
-        val lowerStd = scaler.standardiseLower(raw.warmthLower)
-        val headFeetStd = scaler.standardiseHeadAndFeet(raw.warmthHeadAndFeet)
-        val layersStd = scaler.standardiseLayerCountUpper(raw.layerCountUpper)
-        val totalStd = scaler.standardiseTotalWarmth(raw.totalWarmth)
+        val tempStd = (raw.tempC - scaler.tempCMean) / scaler.tempCStd
+        val upperStd = (raw.warmthUpper - scaler.warmthUpperMean) / scaler.warmthUpperStd
+        val lowerStd = (raw.warmthLower - scaler.warmthLowerMean) / scaler.warmthLowerStd
+        val headFeetStd = (raw.warmthHeadAndFeet - scaler.warmthHeadAndFeetMean) / scaler.warmthHeadAndFeetStd
+        val layersStd = (raw.layerCountUpper - scaler.layerCountUpperMean) / scaler.layerCountUpperStd
+        val totalStd = (raw.totalWarmth - scaler.totalWarmthMean) / scaler.totalWarmthStd
         check(abs(tempStd).isFinite()) // retains deterministic failure only on corrupt non-finite temperatures
         return doubleArrayOf(
             1.0,
@@ -220,13 +215,56 @@ internal object FeatureExtractor {
         return full
     }
 
-    fun countUnseenPieces(
+    fun extractForModel(
+        model: DecodedModel,
+        tempC: Double,
+        isRainy: Boolean,
         pieces: List<ClothingPiece>,
-        activePieceIndexById: Map<Long, Int>,
-    ): Int =
-        pieces
+        typeById: Map<Long, ClothingType>,
+        windSpeedMs: Double? = null,
+        precipitationProbability: Double? = null,
+        rainVolumeMm: Double? = null,
+    ): ExtractedModelFeatures {
+        val raw =
+            extractRaw(
+                tempC = tempC,
+                isRainy = isRainy,
+                pieces = pieces,
+                typeById = typeById,
+                windSpeedMs = windSpeedMs,
+                precipitationProbability = precipitationProbability,
+                rainVolumeMm = rainVolumeMm,
+            )
+        val features = buildFeatures(raw, model.scaler, pieces, model.activePieceIndexById)
+        val unseenPieceIds =
+            pieces
+                .asSequence()
+                .map { it.id }
+                .distinct()
+                .filter { it !in model.activePieceIndexById }
+                .toList()
+        return ExtractedModelFeatures(raw = raw, features = features, unseenPieceIds = unseenPieceIds)
+    }
+
+    /**
+     * Selects up to [MAX_ACTIVE_PIECES] garment IDs observed at least [MIN_PIECE_OBSERVATIONS]
+     * times across usable training history so covariance stays bounded (`d <= 38`) and rarely worn
+     * pieces retain zero residual mean with full prior uncertainty.
+     */
+    fun selectActivePieceIds(usableEntries: List<OutfitEntryWithPieces>): List<Long> {
+        val counts = HashMap<Long, Int>()
+        for (item in usableEntries) {
+            for (pieceId in item.pieces.map { it.id }.distinct()) {
+                counts[pieceId] = (counts[pieceId] ?: 0) + 1
+            }
+        }
+        return counts.entries
             .asSequence()
-            .map { it.id }
-            .distinct()
-            .count { it !in activePieceIndexById }
+            .filter { it.value >= MIN_PIECE_OBSERVATIONS }
+            .sortedWith(compareByDescending<Map.Entry<Long, Int>> { it.value }.thenBy { it.key })
+            .take(MAX_ACTIVE_PIECES)
+            .map { it.key }
+            .sorted()
+            .toList()
+    }
 }

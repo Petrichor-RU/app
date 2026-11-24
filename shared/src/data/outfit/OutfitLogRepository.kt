@@ -3,7 +3,6 @@ package nl.petrichor.app.data.outfit
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -17,15 +16,10 @@ import nl.petrichor.app.data.database.defaultClothingDao
 import nl.petrichor.app.data.database.defaultOutfitDao
 import nl.petrichor.app.data.media.MediaStorage
 import nl.petrichor.app.data.recommendation.RecommendationTrainingCoordinator
+import nl.petrichor.app.data.recommendation.recommendationAppScope
 import nl.petrichor.app.data.wardrobe.ClothingDao
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import kotlin.time.Clock
-
-/**
- * Application-level scope for background model retraining, owned by the repository layer
- * (consistent with the project's no-DI style).
- */
-internal val outfitAppScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
 private const val DAY_MS = 24L * 60 * 60 * 1000
 
@@ -40,7 +34,7 @@ class OutfitLogRepository(
     private val clothingDao: ClothingDao = defaultClothingDao(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val imageDeleter: suspend (String) -> Unit = { path -> MediaStorage.deleteImage(path) },
-    private val appScope: CoroutineScope = outfitAppScope,
+    private val appScope: CoroutineScope = recommendationAppScope,
     trainingCoordinator: RecommendationTrainingCoordinator? = null,
 ) {
     private val coordinator: RecommendationTrainingCoordinator by lazy {
@@ -160,14 +154,6 @@ class OutfitLogRepository(
         withContext(ioDispatcher) {
             outfitDao.getById(id)
         }
-
-    /**
-     * Retrains lazily at app start when the stored model is missing, stale, or mismatched.
-     * Call once from the app shell.
-     */
-    fun ensureModelFresh() {
-        coordinator.ensureModelFresh()
-    }
 
     companion object {
         fun laundryUntilEpochMs(
