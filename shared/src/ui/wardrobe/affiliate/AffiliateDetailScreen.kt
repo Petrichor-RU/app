@@ -14,18 +14,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ensureActive
 import nl.petrichor.app.data.affiliate.AffiliateItem
-import nl.petrichor.app.data.media.loadRemoteImagePainter
 
 /**
  * Full-screen detail overlay for a sponsored product, layout-compatible with
@@ -44,23 +35,7 @@ fun AffiliateDetailScreen(
     onShop: (AffiliateItem) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var painter by remember(item.imageUrl) { mutableStateOf<Painter?>(null) }
-    LaunchedEffect(item.imageUrl) {
-        val url = item.imageUrl
-        painter =
-            if (url == null) {
-                null
-            } else {
-                try {
-                    loadRemoteImagePainter(url)
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (_: Exception) {
-                    ensureActive()
-                    null
-                }
-            }
-    }
+    val painter = rememberAffiliateImagePainter(item)
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,

@@ -61,6 +61,23 @@ class AffiliateAdapterTest {
     }
 
     @Test
+    fun `buildAffiliateItem carries a bundled base64 image through`() {
+        val item =
+            buildAffiliateItem(
+                store = AffiliateStore.HM,
+                name = "H&M Jeans",
+                url = baseUrl,
+                imageUrl = null,
+                imageBase64 = "aGVsbG8=",
+                price = null,
+                description = null,
+                typeText = "Jeans",
+            )
+        assertEquals("aGVsbG8=", item?.imageBase64)
+        assertEquals(baseUrl, item?.url)
+    }
+
+    @Test
     fun `buildAffiliateItem drops unmappable types`() {
         val item =
             buildAffiliateItem(

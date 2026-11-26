@@ -2,12 +2,16 @@ package nl.petrichor.app.data.affiliate
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import nl.petrichor.app.data.affiliate.adapters.FlipkartAdapter
+import nl.petrichor.app.data.affiliate.adapters.staticAdapters
 import nl.petrichor.app.data.location.LocationSearchRepository
 import nl.petrichor.app.data.location.currentCoordinates
 import nl.petrichor.app.data.weather.Coordinates
@@ -40,10 +44,12 @@ private val CACHE_TTL = 1.hours
 
 /**
  * Feed engine: resolves the user's country (real device location first, the selected weather
- * place as fallback), picks the store serving that country (none → no sponsored items at all),
- * derives the shopping context from the *selected location's* forecast and runs that store's
- * adapter once, capped at [maxItems]. Any failure (blocked request, no network, no results,
- * CORS on WASM) degrades silently to an empty list.
+ * place as fallback), keeps the [adapters] whose store serves that country (none → no sponsored
+ * items at all), derives the shopping context from the *selected location's* forecast and runs
+ * those adapters concurrently. Their items are merged in list order — earlier adapters take
+ * precedence for the limited slots (hand-picked static recommendations first, scraped store
+ * results filling the rest) — deduped by url and capped at [maxItems]. Any failure (blocked
+ * request, no network, no results, CORS on WASM) degrades silently to an empty list.
  *
  * Results are cached in memory (never persisted) under a key of selected place + resolved
  * country and reused for about an hour, so the same adverts are shown until the user switches
@@ -51,14 +57,14 @@ private val CACHE_TTL = 1.hours
  * the cache, so callers can clear the stale adverts before the fresh fetch completes.
  *
  * Fetches are serialized through a mutex: the app shell pre-warms the same feed at startup, and
- * a concurrent second fetch for the same key would both double-hit the store (risking a
+ * a concurrent second fetch for the same key would both double-hit the stores (risking a
  * bot-blocked empty response) and race the cache write — the loser could cache an empty list for
  * an hour. With the mutex, the second caller waits and then serves from the cache. Empty adapter
  * results are likewise never cached (they may be transient blocks); only the deterministic
  * "country not served" empty and non-empty results are.
  */
 class AffiliateFeed(
-    private val adapter: AffiliateAdapter = FlipkartAdapter(),
+    private val adapters: List<StoreAdapter> = defaultAdapters(),
     private val maxItems: Int = MAX_AFFILIATE_ITEMS,
     private val resolveCountryCode: suspend (Place?) -> String? = { place -> defaultCountryCode(place) },
     private val now: () -> Instant = { Clock.System.now() },
@@ -93,20 +99,15 @@ class AffiliateFeed(
                     return@withLock cached.items
                 }
                 onCacheMiss()
-                val store = AffiliateStore.entries.firstOrNull { countryCode != null && countryCode in it.supportedCountries }
+                val eligible = adapters.filter { it.store.serves(countryCode) }
                 val items =
-                    if (store == null) {
+                    if (eligible.isEmpty()) {
                         emptyList()
                     } else {
-                        withTimeout(FETCH_TIMEOUT) {
-                            adapter
-                                .fetch(deriveShoppingContext(weather), maxItems)
-                                .distinctBy { it.url }
-                                .take(maxItems)
-                        }
+                        withTimeout(FETCH_TIMEOUT) { fetchAll(eligible, deriveShoppingContext(weather)) }
                     }
                 // An empty adapter result may be a transient block — never cache it.
-                if (store == null || items.isNotEmpty()) {
+                if (eligible.isEmpty() || items.isNotEmpty()) {
                     cache = CacheEntry(key, now(), items)
                 }
                 items
@@ -118,6 +119,35 @@ class AffiliateFeed(
                 currentCoroutineContext().ensureActive()
                 emptyList()
             }
+        }
+
+    /**
+     * Runs all [eligible] adapters concurrently and merges their items in list order, so earlier
+     * adapters take precedence for the limited slots; deduped by url (the first, i.e. the
+     * higher-precedence item wins) and capped at [maxItems]. A failing adapter contributes
+     * nothing and never blocks the others.
+     */
+    private suspend fun fetchAll(
+        eligible: List<StoreAdapter>,
+        context: ShoppingContext,
+    ): List<AffiliateItem> =
+        coroutineScope {
+            eligible
+                .map { source ->
+                    async {
+                        try {
+                            source.adapter.fetch(context, maxItems)
+                        } catch (exception: CancellationException) {
+                            throw exception
+                        } catch (_: Exception) {
+                            currentCoroutineContext().ensureActive()
+                            emptyList()
+                        }
+                    }
+                }.awaitAll()
+                .flatten()
+                .distinctBy { it.url }
+                .take(maxItems)
         }
 
     private fun cacheKey(
@@ -170,3 +200,10 @@ internal suspend fun defaultCountryCode(
 
 /** One shared repository for all reverse-geocoding lookups, so each fetch does not spin up a new HTTP client. */
 private val sharedSearchRepository: LocationSearchRepository by lazy { LocationSearchRepository() }
+
+/**
+ * The default adapter chain, in precedence order: the hand-picked static recommendations first
+ * (one binding per store they use, so each group is country-gated by its own store), then the
+ * scraped store adapters, which fill whatever slots remain.
+ */
+private fun defaultAdapters(): List<StoreAdapter> = staticAdapters() + StoreAdapter(AffiliateStore.FLIPKART, FlipkartAdapter())

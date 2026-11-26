@@ -42,11 +42,13 @@ internal class FlipkartAdapter(
         for (term in terms.take(MAX_REQUESTS)) {
             // A single term failing (bad URL, changed payload) must not discard items already
             // collected from earlier terms — degrade that term to empty and keep going.
-            items += runCatching { fetchTerm(term, maxItems - items.size) }.onFailure {
-                if (it is CancellationException) {
-                    currentCoroutineContext().ensureActive()
-                }
-            }.getOrDefault(emptyList())
+            items +=
+                runCatching { fetchTerm(term, maxItems - items.size) }
+                    .onFailure {
+                        if (it is CancellationException) {
+                            currentCoroutineContext().ensureActive()
+                        }
+                    }.getOrDefault(emptyList())
             if (items.size >= maxItems) break
         }
         return items.distinctBy { it.url }.take(maxItems)

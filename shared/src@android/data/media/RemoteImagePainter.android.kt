@@ -12,10 +12,15 @@ private val remotePainterCache = LruCache<String, Painter>(30)
 internal actual suspend fun loadRemoteImagePainter(url: String): Painter? =
     remotePainterCache.get(url)
         ?: remoteImageBytes(url)?.let { bytes ->
-            decodeRemoteBitmap(bytes)?.let { bitmap ->
-                BitmapPainter(bitmap.asImageBitmap()).also { remotePainterCache.put(url, it) }
-            }
+            loadImageBytesPainter(bytes)?.also { remotePainterCache.put(url, it) }
         }
+
+internal actual suspend fun loadImageBytesPainter(bytes: ByteArray): Painter? =
+    try {
+        decodeRemoteBitmap(bytes)?.let { BitmapPainter(it.asImageBitmap()) }
+    } catch (_: Exception) {
+        null
+    }
 
 private fun decodeRemoteBitmap(bytes: ByteArray): android.graphics.Bitmap? =
     try {

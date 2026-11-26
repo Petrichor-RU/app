@@ -12,27 +12,19 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.catbit.material_symbols.MaterialSymbol
 import dev.catbit.material_symbols.MaterialSymbols
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.ensureActive
 import nl.petrichor.app.data.affiliate.AffiliateItem
-import nl.petrichor.app.data.media.loadRemoteImagePainter
 
 /**
- * Grid card for a sponsored product: square remote image, a "Sponsored" badge at the top-start
+ * Grid card for a sponsored product: square product photo (remote, or a bundled base64 image
+ * for hand-picked items), a "Sponsored" badge at the top-start
  * (theme secondary container colour), no name overlay and no price on the card (price is
  * shown on the detail screen only).
  */
@@ -42,23 +34,7 @@ fun SponsoredClothingCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var painter by remember(item.imageUrl) { mutableStateOf<Painter?>(null) }
-    LaunchedEffect(item.imageUrl) {
-        val url = item.imageUrl
-        painter =
-            if (url == null) {
-                null
-            } else {
-                try {
-                    loadRemoteImagePainter(url)
-                } catch (exception: CancellationException) {
-                    throw exception
-                } catch (_: Exception) {
-                    ensureActive()
-                    null // no network / CORS / undecodable: placeholder icon
-                }
-            }
-    }
+    val painter = rememberAffiliateImagePainter(item)
     Card(
         modifier =
             modifier

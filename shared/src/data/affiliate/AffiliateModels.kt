@@ -7,13 +7,19 @@ import nl.petrichor.app.data.weather.WeatherSnapshot
 /**
  * The store the affiliate feed uses; revealed on the detail screen, not on the card.
  * [supportedCountries] gates the sponsored items: only users whose resolved country is in the
- * set see this store's recommendations.
+ * set see this store's recommendations. Null means worldwide — the store serves any resolved
+ * country and even an unresolved one; restrict it later by setting a set, e.g. `setOf("NL")`.
  */
 enum class AffiliateStore(
     val displayName: String,
-    val supportedCountries: Set<String>,
+    val supportedCountries: Set<String>?,
 ) {
     FLIPKART("Flipkart", setOf("IN")),
+    HM("H&M", null),
+    ;
+
+    /** True when this store serves [countryCode]; null (unresolved) is served only by worldwide stores. */
+    fun serves(countryCode: String?): Boolean = supportedCountries == null || (countryCode != null && countryCode in supportedCountries)
 }
 
 /**
@@ -29,6 +35,12 @@ data class AffiliateItem(
     val store: AffiliateStore,
     val url: String,
     val imageUrl: String?,
+    /**
+     * Bundled base64 photo for hand-picked static items, so they render with no network request
+     * (offline, and on WASM where remote fetches are usually CORS-blocked). Takes precedence over
+     * [imageUrl] when both are set.
+     */
+    val imageBase64: String? = null,
     /** Display-ready price (e.g. "€12.00"); shown on the detail screen only, never on the card. */
     val price: String?,
     val description: String?,

@@ -16,6 +16,17 @@ fun interface AffiliateAdapter {
 }
 
 /**
+ * Binds a [store] to the [adapter] serving it. The feed runs the bindings whose store serves the
+ * user's country in list order and merges their items in that order, so bindings earlier in the
+ * list take precedence for the limited sponsored slots (e.g. hand-picked static recommendations
+ * before scraped store results).
+ */
+data class StoreAdapter(
+    val store: AffiliateStore,
+    val adapter: AffiliateAdapter,
+)
+
+/**
  * Builds an [AffiliateItem], dropping it when the link is not https or the store text cannot be
  * mapped onto a built-in clothing type (such items MUST be dropped). The [url] is used exactly
  * as given: each adapter injects its own store-specific affiliate code *before* calling this
@@ -28,6 +39,7 @@ internal fun buildAffiliateItem(
     name: String,
     url: String,
     imageUrl: String?,
+    imageBase64: String? = null,
     price: String?,
     description: String?,
     typeText: String,
@@ -42,6 +54,7 @@ internal fun buildAffiliateItem(
             store = store,
             url = url,
             imageUrl = imageUrl?.takeIf { it.startsWith("https://") },
+            imageBase64 = imageBase64,
             price = price,
             description = description,
             typeName = type.first,
