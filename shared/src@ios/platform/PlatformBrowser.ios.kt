@@ -7,9 +7,10 @@ import platform.UIKit.UIApplication
 
 actual object PlatformBrowser {
     actual fun open(url: String) {
-        // openURL is deprecated since iOS 10; use open(_:options:completionHandler:) instead.
+        // Kotlin/Native imports the ObjC selector openURL:options:completionHandler: as openURL
+        // (only the single-argument openURL: is deprecated since iOS 10).
         NSURL(string = url).let {
-            UIApplication.sharedApplication.open(it, options = emptyMap(), completionHandler = null)
+            UIApplication.sharedApplication.openURL(it, options = emptyMap<Any?, Any?>(), completionHandler = null)
         }
     }
 }
