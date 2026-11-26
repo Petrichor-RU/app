@@ -2,17 +2,12 @@ package nl.petrichor.app.data.outfit
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.datetime.LocalDate
 
 /** MutableStateFlow-backed fake so tests need no Room driver (same pattern as FakeClothingDao). */
-@Suppress("TooManyFunctions") // mirrors OutfitDao contract for repository and coordinator tests
 class FakeOutfitDao : OutfitDao {
     val entries = MutableStateFlow<List<OutfitEntryWithPieces>>(emptyList())
     val modelStates = mutableListOf<ModelState>()
-    private val modelStateFlow = MutableStateFlow<ModelState?>(null)
-    val impressions = mutableListOf<RecommendationImpression>()
-    var nextImpressionId = 1L
     val insertedEntries = mutableListOf<OutfitEntry>()
     val insertedLinks = mutableListOf<List<OutfitEntryPiece>>()
     val updatedEntries = mutableListOf<OutfitEntry>()
@@ -26,7 +21,7 @@ class FakeOutfitDao : OutfitDao {
     override fun getAll(): Flow<List<OutfitEntryWithPieces>> = entries
 
     override fun getForDate(date: LocalDate): Flow<List<OutfitEntryWithPieces>> =
-        entries.map { list -> list.filter { it.entry.wornOnDate == date } }
+        MutableStateFlow(entries.value.filter { it.entry.wornOnDate == date })
 
     override suspend fun getUnsurveyedForDate(date: LocalDate): List<OutfitEntryWithPieces> =
         entries.value
@@ -37,27 +32,15 @@ class FakeOutfitDao : OutfitDao {
 
     override suspend fun getEntriesForPiece(pieceId: Long): List<OutfitEntry> =
         entries.value
-            .filter { entryWithPieces ->
-                entryWithPieces.pieces.any { it.id == pieceId } ||
-                    links.any { it.entryId == entryWithPieces.entry.id && it.pieceId == pieceId }
-            }.map { it.entry }
+            .filter { entryWithPieces -> links.any { it.entryId == entryWithPieces.entry.id && it.pieceId == pieceId } }
+            .map { it.entry }
 
-    override fun countSurveyed(): Flow<Int> = entries.map { list -> list.count { it.entry.surveyFeelingScore != null } }
-
-    override fun countUsableTrainingEntries(): Flow<Int> =
-        entries.map { list ->
-            list.count { item ->
-                val hasTemp = item.entry.minTempC != null || item.entry.temperatureC != null
-                val hasPieces = item.pieces.isNotEmpty() || links.any { it.entryId == item.entry.id }
-                item.entry.surveyFeelingScore != null && hasTemp && hasPieces
-            }
-        }
+    override fun countSurveyed(): Flow<Int> = MutableStateFlow(entries.value.count { it.entry.surveyFeelingScore != null })
 
     override suspend fun getTrainingEntries(): List<OutfitEntryWithPieces> =
-        entries.value
-            .filter {
-                it.entry.surveyFeelingScore != null && (it.entry.minTempC != null || it.entry.temperatureC != null)
-            }.sortedBy { it.entry.surveyedAtEpochMs ?: 0L }
+        entries.value.filter {
+            it.entry.surveyFeelingScore != null && (it.entry.minTempC != null || it.entry.temperatureC != null)
+        }
 
     override suspend fun getNewestSurveyEpochMs(): Long? = entries.value.mapNotNull { it.entry.surveyedAtEpochMs }.maxOrNull()
 
@@ -88,9 +71,6 @@ class FakeOutfitDao : OutfitDao {
         score: Int,
         verdict: WarmthVerdict,
         surveyedAtEpochMs: Long,
-        mostlyIndoors: Boolean?,
-        highActivity: Boolean?,
-        gotWet: Boolean?,
     ) {
         surveys += Triple(entryId, score, verdict)
         entries.value =
@@ -102,9 +82,6 @@ class FakeOutfitDao : OutfitDao {
                                 surveyFeelingScore = score,
                                 surveyWarmthVerdict = verdict,
                                 surveyedAtEpochMs = surveyedAtEpochMs,
-                                mostlyIndoors = mostlyIndoors,
-                                highActivity = highActivity,
-                                gotWet = gotWet,
                             ),
                     )
                 } else {
@@ -125,39 +102,11 @@ class FakeOutfitDao : OutfitDao {
         links.removeAll { it.entryId == entryId }
     }
 
-    override suspend fun getModelState(): ModelState? = modelStateFlow.value
+    override suspend fun getModelState(): ModelState? = modelStates.lastOrNull()
 
-    override fun observeModelState(): Flow<ModelState?> = modelStateFlow
+    override fun observeModelState(): Flow<ModelState?> = MutableStateFlow(modelStates.lastOrNull())
 
     override suspend fun insertModelState(state: ModelState) {
         modelStates += state
-        modelStateFlow.value = state
-    }
-
-    override suspend fun deleteModelState() {
-        modelStates.clear()
-        modelStateFlow.value = null
-    }
-
-    override suspend fun insertRecommendationImpression(impression: RecommendationImpression): Long {
-        val assignedId = if (impression.id == 0L) nextImpressionId++ else impression.id
-        impressions += impression.copy(id = assignedId)
-        return assignedId
-    }
-
-    override suspend fun getImpressionsForDate(targetDate: LocalDate): List<RecommendationImpression> =
-        impressions
-            .filter { it.targetDate == targetDate }
-            .sortedWith(compareByDescending<RecommendationImpression> { it.shownAtEpochMs }.thenByDescending { it.id })
-
-    override suspend fun linkImpressionWornEntry(
-        impressionId: Long,
-        entryId: Long,
-    ) {
-        for (i in impressions.indices) {
-            if (impressions[i].id == impressionId) {
-                impressions[i] = impressions[i].copy(wornEntryId = entryId)
-            }
-        }
     }
 }

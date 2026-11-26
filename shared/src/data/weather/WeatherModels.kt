@@ -33,11 +33,6 @@ data class WeatherSnapshot(
      * BackgroundConditionResolver to compute the location's local time for the background.
      */
     val utcOffsetKnown: Boolean = utcOffsetSeconds != 0L,
-    val temperatureC: Double? = null,
-    val feelsLikeC: Double? = null,
-    val windSpeedMs: Double? = null,
-    val rainVolumeMm: Double? = null,
-    val capturedAtEpochMs: Long? = null,
 )
 
 data class ForecastDay(
@@ -46,10 +41,5 @@ data class ForecastDay(
     val max: Int,
     val icon: String,
     /** OpenWeatherMap weather condition code (`weather[].id`, first entry is primary); see [WeatherConditions]. */
-    val conditionId: Int = 0,
-    val feelsLikeC: Double? = null,
-    val windSpeedMs: Double? = null,
-    val humidity: Int? = null,
-    val precipitationProbability: Double? = null,
-    val rainVolumeMm: Double? = null,
+    val conditionId: Int,
 )

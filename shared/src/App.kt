@@ -35,7 +35,7 @@ import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import nl.petrichor.app.data.background.BackgroundConditionResolver
-import nl.petrichor.app.data.recommendation.SharedTrainingCoordinator
+import nl.petrichor.app.data.outfit.OutfitLogRepository
 import nl.petrichor.app.ui.background.AppBackgroundController
 import nl.petrichor.app.ui.background.AppWeatherState
 import nl.petrichor.app.ui.background.ParkBackground
@@ -110,7 +110,7 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
 
     // Retrain the recommendation model lazily at app start when the stored model is stale.
     LaunchedEffect(Unit) {
-        if (!inspection) SharedTrainingCoordinator.instance.ensureModelFresh()
+        if (!inspection) OutfitLogRepository().ensureModelFresh()
     }
 
     // Notification deep links: animate to the Journal tab when an action is pending.

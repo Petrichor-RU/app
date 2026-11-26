@@ -9,7 +9,6 @@ import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitDao
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryPiece
-import nl.petrichor.app.data.outfit.RecommendationImpression
 import nl.petrichor.app.data.wardrobe.ClothingDao
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
@@ -17,8 +16,9 @@ import nl.petrichor.app.data.wardrobe.ClothingType
 /**
  * Room database for the whole app (wardrobe and outfit journal).
  * Uses Room's multiplatform support with SQLite bundled.
- * Version 6 adds survey context columns and recommendation_impressions slate logging.
- * The platform builders use fallbackToDestructiveMigration(true), which the owner approved.
+ * Version 2 adds the outfit journal entities; the platform builders use
+ * fallbackToDestructiveMigration(true), which the owner approved (existing wardrobe
+ * data need not be preserved).
  */
 @Database(
     entities = [
@@ -27,9 +27,8 @@ import nl.petrichor.app.data.wardrobe.ClothingType
         OutfitEntry::class,
         OutfitEntryPiece::class,
         ModelState::class,
-        RecommendationImpression::class,
     ],
-    version = 6,
+    version = 2,
     exportSchema = false,
 )
 @ConstructedBy(PetrichorDatabaseConstructor::class)

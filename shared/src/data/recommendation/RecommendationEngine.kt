@@ -49,9 +49,6 @@ data class RecommendationInput(
     val entries: List<OutfitEntryWithPieces>,
     val surveyedCount: Int,
     val modelState: ModelState?,
-    val windSpeedMs: Double? = null,
-    val precipitationProbability: Double? = null,
-    val rainVolumeMm: Double? = null,
     val nowEpochMs: Long = Clock.System.now().toEpochMilliseconds(),
     val random: Random = Random.Default,
 )
@@ -89,10 +86,7 @@ object RecommendationEngine {
 
     fun recommendOutfits(input: RecommendationInput): List<OutfitCandidate> = recommendSlate(input).candidates
 
-    /**
-     * Returns both the top-3 [OutfitCandidate]s and their per-slot metadata/propensities for
-     * session-stable impression logging.
-     */
+    /** Returns both the top-3 [OutfitCandidate]s and their per-slot metadata. */
     fun recommendSlate(input: RecommendationInput): RankedSlate {
         val context = prepareContext(input)
         val candidates = CandidateGenerator.generate(context)
@@ -101,7 +95,7 @@ object RecommendationEngine {
     }
 
     /**
-     * Suspending entry point for UI/background ranking: yields every [SCORING_YIELD_INTERVAL]
+     * Suspending entry point for background ranking: yields every [SCORING_YIELD_INTERVAL]
      * candidates so single-threaded runtimes such as `wasmJs` never stall UI frames.
      */
     suspend fun recommendOutfitsSuspending(input: RecommendationInput): List<OutfitCandidate> = recommendSlateSuspending(input).candidates
@@ -120,11 +114,17 @@ object RecommendationEngine {
     private fun prepareContext(input: RecommendationInput): RecommendationScoringContext {
         val typeById = input.clothingTypes.associateBy { it.id }
         val decodedModel = DecodedModel.decode(input.modelState)
+        val effectiveSurveyed =
+            if (decodedModel != null) {
+                minOf(input.surveyedCount, input.modelState?.sampleCount ?: input.surveyedCount)
+            } else {
+                input.surveyedCount
+            }
         val mode =
             if (input.tempC == null) {
                 RecommendationMode.FALLBACK
             } else {
-                activeMode(input.surveyedCount, decodedModel != null)
+                activeMode(effectiveSurveyed, decodedModel != null)
             }
         val pool = input.wardrobePieces.filter { !it.archived && it.laundryUntilEpochMs <= input.nowEpochMs }
         return RecommendationScoringContext(input, pool, typeById, mode, decodedModel)

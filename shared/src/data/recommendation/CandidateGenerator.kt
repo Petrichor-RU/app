@@ -13,12 +13,10 @@ import kotlin.math.abs
  * Candidate construction: logged outfits (with score-driven same-zone laundry replacements)
  * plus constructed per-zone combinations with multi-layer upper support.
  * Split outfits and full-body outfits remain mutually exclusive; outer layers are offered below
- * [OUTER_MAX_TEMP_C] or in rain with rain-protective shells. Logged and constructed candidates
- * keep separate budgets before ranking.
+ * [OUTER_MAX_TEMP_C]. Logged and constructed candidates keep separate budgets before ranking.
  */
 internal object CandidateGenerator {
     private const val OUTER_MAX_TEMP_C = 14.0
-    private const val RAIN_OUTER_EXPOSURE_THRESHOLD = 0.5
     private const val LAUNDRY_REPLACEMENT_TOP_K = 5
     private const val TOP_K_UPPER_BASE = 2
     private const val TOP_K_UPPER_OUTER = 2
@@ -186,7 +184,7 @@ internal object CandidateGenerator {
         source: RecommendationSource,
     ): List<OutfitCandidate> {
         val tempC = input.tempC ?: return emptyList()
-        val options = buildLayerOptions(input, pool, typeById, tempC, Scoring.idealWarmth(input, typeById))
+        val options = buildLayerOptions(pool, typeById, tempC, Scoring.idealWarmth(input, typeById))
         return combinationsOf(options)
             .take(RecommendationEngine.MAX_CONSTRUCTED_CANDIDATES)
             .map { pieces ->
@@ -195,7 +193,6 @@ internal object CandidateGenerator {
     }
 
     private fun buildLayerOptions(
-        input: RecommendationInput,
         pool: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
         tempC: Double,
@@ -203,7 +200,7 @@ internal object CandidateGenerator {
     ): LayerOptions {
         val byZone = pool.groupBy { groupZoneFor(typeById[it.typeId]?.supertype ?: ClothingSupertype.ACCESSORIES) }
         val (selectedBases, selectedOuters, offerOuter) =
-            selectUpperLayers(input, byZone[CoverageZone.UPPER].orEmpty(), typeById, tempC, ideal)
+            selectUpperLayers(byZone[CoverageZone.UPPER].orEmpty(), typeById, tempC, ideal)
 
         return LayerOptions(
             upperBases = selectedBases,
@@ -242,26 +239,21 @@ internal object CandidateGenerator {
     }
 
     private fun selectUpperLayers(
-        input: RecommendationInput,
         upperPool: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
         tempC: Double,
         ideal: Double,
     ): Triple<List<ClothingPiece>, List<ClothingPiece>, Boolean> {
         val (outerUpperPool, baseUpperPool) = upperPool.partition { typeById[it.typeId]?.name in OUTER_TYPE_NAMES }
-        val coldOuter = tempC < OUTER_MAX_TEMP_C
-        val rainOuterPool = outerUpperPool.filter { it.weatherProtection.hasRainProtection }
-        val rainOuter = (input.isRainy || input.rainExposure >= RAIN_OUTER_EXPOSURE_THRESHOLD) && rainOuterPool.isNotEmpty()
-        val offerOuter = coldOuter || rainOuter
-        val eligibleOuterPool = if (coldOuter || baseUpperPool.isEmpty()) outerUpperPool else rainOuterPool
+        val offerOuter = tempC < OUTER_MAX_TEMP_C
 
         val upperTarget = ideal * ZONE_SHARE.getValue(CoverageZone.UPPER)
-        val baseTarget = if (offerOuter && eligibleOuterPool.isNotEmpty()) upperTarget * BASE_WITH_OUTER_SHARE else upperTarget
+        val baseTarget = if (offerOuter && outerUpperPool.isNotEmpty()) upperTarget * BASE_WITH_OUTER_SHARE else upperTarget
         val selectedBases = rankByTarget(baseUpperPool, typeById, baseTarget, TOP_K_UPPER_BASE)
         val outerTarget = if (selectedBases.isNotEmpty()) upperTarget * (1.0 - BASE_WITH_OUTER_SHARE) else upperTarget
         val selectedOuters =
             if (offerOuter || baseUpperPool.isEmpty()) {
-                rankByTarget(eligibleOuterPool, typeById, outerTarget, TOP_K_UPPER_OUTER)
+                rankByTarget(outerUpperPool, typeById, outerTarget, TOP_K_UPPER_OUTER)
             } else {
                 emptyList()
             }

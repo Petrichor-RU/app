@@ -10,9 +10,8 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
-import nl.petrichor.app.data.wardrobe.WeatherProtection
 
-/** Shared wardrobe and surveyed-journal fixtures for active-learning and exploration tests. */
+/** Shared wardrobe and surveyed-journal fixtures for recommendation algorithm tests. */
 internal object SurveyHistoryFixtures {
     val baseDate = LocalDate(2026, 9, 1)
     val teeType = ClothingType(id = 1L, name = "T-Shirts", supertype = ClothingSupertype.UPPER_BODY)
@@ -27,13 +26,11 @@ internal object SurveyHistoryFixtures {
         id: Long,
         typeId: Long,
         material: Material = Material.COTTON,
-        protection: WeatherProtection = WeatherProtection.NONE,
     ) = ClothingPiece(
         id = id,
         name = "p$id",
         typeId = typeId,
         material = material,
-        weatherProtection = protection,
         notes = null,
         imagePath = "",
         thumbnailPath = "",
@@ -48,11 +45,6 @@ internal object SurveyHistoryFixtures {
         score: Int,
         verdict: WarmthVerdict,
         isRainy: Boolean = false,
-        pop: Double? = null,
-        rainMm: Double? = null,
-        mostlyIndoors: Boolean? = null,
-        highActivity: Boolean? = null,
-        gotWet: Boolean? = null,
     ): OutfitEntryWithPieces {
         val ts = 1_790_000_000_000L + dayOffset * 86_400_000L
         return OutfitEntryWithPieces(
@@ -69,14 +61,9 @@ internal object SurveyHistoryFixtures {
                     weatherDescription = if (isRainy) "Rain" else "Clear",
                     weatherIcon = if (isRainy) "10d" else "01d",
                     isRainy = isRainy,
-                    precipitationProbability = pop,
-                    rainVolumeMm = rainMm,
                     surveyFeelingScore = score,
                     surveyWarmthVerdict = verdict,
                     surveyedAtEpochMs = ts,
-                    mostlyIndoors = mostlyIndoors,
-                    highActivity = highActivity,
-                    gotWet = gotWet,
                     createdAtEpochMs = ts,
                 ),
             pieces = pieces,

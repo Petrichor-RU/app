@@ -40,11 +40,5 @@ internal fun buildOutfitEntry(
         weatherDescription = weatherSnapshot.weatherDescription,
         weatherIcon = weatherSnapshot.weatherIcon,
         isRainy = weatherSnapshot.isRainy,
-        windSpeedMs = weatherSnapshot.windSpeedMs,
-        humidity = weatherSnapshot.humidity,
-        precipitationProbability = weatherSnapshot.precipitationProbability,
-        rainVolumeMm = weatherSnapshot.rainVolumeMm,
-        weatherCapturedAtEpochMs = weatherSnapshot.weatherCapturedAtEpochMs,
-        locationName = weatherSnapshot.locationName,
     )
 }

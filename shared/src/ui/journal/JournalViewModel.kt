@@ -14,13 +14,10 @@ import kotlinx.coroutines.withContext
 import nl.petrichor.app.data.location.SelectedLocationStore
 import nl.petrichor.app.data.location.currentPlace
 import nl.petrichor.app.data.media.MediaStorage
-import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
 import nl.petrichor.app.data.outfit.OutfitLogRepository
-import nl.petrichor.app.data.outfit.SurveyContextAnswers
 import nl.petrichor.app.data.outfit.WarmthVerdict
-import nl.petrichor.app.data.recommendation.SharedTrainingCoordinator
 import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.WardrobeRepository
@@ -34,15 +31,12 @@ import nl.petrichor.app.data.weather.WeatherSnapshot
  */
 @Suppress("TooGenericExceptionCaught") // repository failures are surfaced as snackbars, so any exception is handled
 class JournalViewModel(
-    private val repository: OutfitLogRepository =
-        OutfitLogRepository(trainingCoordinator = SharedTrainingCoordinator.instance),
-    wardrobeRepository: WardrobeRepository =
-        WardrobeRepository(trainingCoordinator = SharedTrainingCoordinator.instance),
+    private val repository: OutfitLogRepository = OutfitLogRepository(),
+    wardrobeRepository: WardrobeRepository = WardrobeRepository(),
     private val weatherRepository: WeatherRepository = WeatherRepository(),
     private val locationStore: SelectedLocationStore = SelectedLocationStore(),
 ) : ViewModel() {
     val entries: Flow<List<OutfitEntryWithPieces>> = repository.entries
-    val modelState: Flow<ModelState?> = repository.modelState
     val wardrobePieces: Flow<List<ClothingPiece>> = wardrobeRepository.getAllClothing()
     val clothingTypes: Flow<List<ClothingType>> = wardrobeRepository.getClothingTypes()
     val laundryVersion: Flow<Int> =
@@ -98,10 +92,9 @@ class JournalViewModel(
         entryId: Long,
         score: Int,
         verdict: WarmthVerdict,
-        context: SurveyContextAnswers = SurveyContextAnswers(),
     ): Boolean =
         try {
-            repository.saveSurvey(entryId, score, verdict, context)
+            repository.saveSurvey(entryId, score, verdict)
             showSnackbar("Survey saved!")
             true
         } catch (exception: CancellationException) {

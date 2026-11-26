@@ -56,7 +56,7 @@ class RidgeRatingModelTest {
     )
 
     @Test
-    fun `feature extractor produces fourteen scaled condition and interaction features and safely handles constant inputs`() {
+    fun `feature extractor produces ten scaled interaction features and safely handles constant inputs`() {
         val tee = piece(1, teeType.id, Material.LINEN)
         val raw = FeatureExtractor.extractRaw(18.0, isRainy = false, listOf(tee), typeById)
         val scaler = FeatureScaler.fit(listOf(raw))
@@ -121,11 +121,9 @@ class RidgeRatingModelTest {
         val artifact = RidgeRatingBaseline.fit(samples)
         val modelState =
             ModelState(
-                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
-                dataRevision = 1L,
+                coefficientsJson = Json.encodeToString(artifact),
                 trainedAtEpochMs = 1_800_000_000_000L,
-                usableSampleCount = samples.size,
-                artifactJson = Json.encodeToString(artifact),
+                sampleCount = samples.size,
             )
         val dummyHistory = samples.indices.map { i -> OutfitEntryWithPieces(entry(i + 1L, tempC = 14.0, score = 4), mildOutfit) }
         val pool = listOf(woolJacket, woolSweater, linenTee, jeans, linenPants)
@@ -156,22 +154,22 @@ class RidgeRatingModelTest {
             )
         val validState =
             ModelState(
-                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
-                dataRevision = 1L,
+                coefficientsJson = Json.encodeToString(validArtifact),
                 trainedAtEpochMs = 1L,
-                usableSampleCount = 1,
-                artifactJson = Json.encodeToString(validArtifact),
+                sampleCount = 1,
             )
         assertNotNull(DecodedModel.decode(validState))
-        assertNull(DecodedModel.decode(validState.copy(schemaVersion = ModelState.CURRENT_SCHEMA_VERSION + 1)))
-        assertNull(DecodedModel.decode(validState.copy(artifactJson = "{not-valid-json")))
+        val wrongSchemaArtifact = validArtifact.copy(featureSchemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION + 1)
+        assertNull(DecodedModel.decode(validState.copy(coefficientsJson = Json.encodeToString(wrongSchemaArtifact))))
+        assertNull(DecodedModel.decode(validState.copy(coefficientsJson = "{not-valid-json")))
+        assertNull(DecodedModel.decode(validState.copy(coefficientsJson = "[1.0, 2.0, 3.0]")))
 
         val wrongSizeArtifact = validArtifact.copy(ratingMean = listOf(0.0, 1.0))
-        assertNull(DecodedModel.decode(validState.copy(artifactJson = Json.encodeToString(wrongSizeArtifact))))
+        assertNull(DecodedModel.decode(validState.copy(coefficientsJson = Json.encodeToString(wrongSizeArtifact))))
 
         val zeroStdScaler = validScaler.copy(tempCStd = 0.0)
         val badScalerArtifact = validArtifact.copy(scaler = zeroStdScaler)
-        assertNull(DecodedModel.decode(validState.copy(artifactJson = Json.encodeToString(badScalerArtifact))))
+        assertNull(DecodedModel.decode(validState.copy(coefficientsJson = Json.encodeToString(badScalerArtifact))))
     }
 
     @Test

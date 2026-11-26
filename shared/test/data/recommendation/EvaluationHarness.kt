@@ -193,9 +193,6 @@ internal object EvaluationHarness {
                     isRainy = e.isRainy,
                     date = e.wornOnDate,
                     typeById = typeById,
-                    windSpeedMs = e.windSpeedMs,
-                    precipitationProbability = e.precipitationProbability,
-                    rainVolumeMm = e.rainVolumeMm,
                 )
             check(pred.score.isFinite()) { "Non-finite prediction in $policy for holdout entry ${e.id}" }
             ratingRecords += buildObservationError(sortedTrain, item, tempC, pred.ratingEstimate, targetScore)
@@ -362,20 +359,15 @@ internal object EvaluationHarness {
                     isRainy = e.isRainy,
                     pieces = item.pieces,
                     typeById = typeById,
-                    windSpeedMs = e.windSpeedMs,
-                    precipitationProbability = e.precipitationProbability,
-                    rainVolumeMm = e.rainVolumeMm,
                 ) to score
             }
         if (samples.isEmpty()) return null
         val artifact = RidgeRatingBaseline.fit(samples)
         val state =
             ModelState(
-                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
-                dataRevision = 1L,
+                coefficientsJson = Json.encodeToString(artifact),
                 trainedAtEpochMs = 0L,
-                usableSampleCount = samples.size,
-                artifactJson = Json.encodeToString(artifact),
+                sampleCount = samples.size,
             )
         return DecodedModel.decode(state)
     }
@@ -401,9 +393,6 @@ internal object EvaluationHarness {
                 pieces = current.pieces,
                 tempC = tempC,
                 isRainy = e.isRainy,
-                windSpeedMs = e.windSpeedMs,
-                precipitationProbability = e.precipitationProbability,
-                rainVolumeMm = e.rainVolumeMm,
                 date = e.wornOnDate,
                 typeById = typeById,
             )
@@ -421,20 +410,8 @@ internal object EvaluationHarness {
         isRainy: Boolean,
         date: LocalDate,
         typeById: Map<Long, ClothingType>,
-        windSpeedMs: Double? = null,
-        precipitationProbability: Double? = null,
-        rainVolumeMm: Double? = null,
     ): StepPrediction {
-        val raw =
-            FeatureExtractor.extractRaw(
-                tempC = tempC,
-                isRainy = isRainy,
-                pieces = pieces,
-                typeById = typeById,
-                windSpeedMs = windSpeedMs,
-                precipitationProbability = precipitationProbability,
-                rainVolumeMm = rainVolumeMm,
-            )
+        val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
         return when (policy) {
             EvaluationPolicy.HEURISTIC,
             EvaluationPolicy.ADDITIVE_LINEAR_V1,
@@ -453,9 +430,6 @@ internal object EvaluationHarness {
                     isRainy = isRainy,
                     date = date,
                     typeById = typeById,
-                    windSpeedMs = windSpeedMs,
-                    precipitationProbability = precipitationProbability,
-                    rainVolumeMm = rainVolumeMm,
                 )
             }
 
@@ -470,9 +444,6 @@ internal object EvaluationHarness {
                     tempC = tempC,
                     isRainy = isRainy,
                     typeById = typeById,
-                    windSpeedMs = windSpeedMs,
-                    precipitationProbability = precipitationProbability,
-                    rainVolumeMm = rainVolumeMm,
                 )
             }
         }
@@ -519,9 +490,6 @@ internal object EvaluationHarness {
         isRainy: Boolean,
         date: LocalDate,
         typeById: Map<Long, ClothingType>,
-        windSpeedMs: Double?,
-        precipitationProbability: Double?,
-        rainVolumeMm: Double?,
     ): StepPrediction {
         val score =
             if (model == null) {
@@ -533,9 +501,6 @@ internal object EvaluationHarness {
                     isRainy = isRainy,
                     pieces = pieces,
                     typeById = typeById,
-                    windSpeedMs = windSpeedMs,
-                    precipitationProbability = precipitationProbability,
-                    rainVolumeMm = rainVolumeMm,
                 )
             }
         val probs = heuristicThermalBaseline(dataset, history, pieces, tempC, isRainy, date, typeById)
@@ -551,9 +516,6 @@ internal object EvaluationHarness {
         tempC: Double,
         isRainy: Boolean,
         typeById: Map<Long, ClothingType>,
-        windSpeedMs: Double?,
-        precipitationProbability: Double?,
-        rainVolumeMm: Double?,
     ): StepPrediction {
         val comfort =
             model?.let {
@@ -563,9 +525,6 @@ internal object EvaluationHarness {
                     isRainy = isRainy,
                     pieces = pieces,
                     typeById = typeById,
-                    windSpeedMs = windSpeedMs,
-                    precipitationProbability = precipitationProbability,
-                    rainVolumeMm = rainVolumeMm,
                 )
             } ?: priorComfortPrediction(raw)
         val rankingScore =

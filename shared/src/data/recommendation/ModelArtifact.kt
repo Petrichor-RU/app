@@ -12,13 +12,14 @@ import org.jetbrains.kotlinx.multik.ndarray.data.get
 import org.jetbrains.kotlinx.multik.ndarray.data.set
 
 /**
- * Versioned serialisable model payload persisted inside [ModelState.artifactJson].
+ * Versioned serialisable model payload persisted inside [ModelState.coefficientsJson].
  * Stores standardisation stats, rating posterior (mean + covariance), ordinal thermal posterior
  * (mean + covariance + threshold), active per-garment IDs, and replay fingerprint metadata.
  */
 @Serializable
 data class RecommendationModelArtifact(
     val featureSchemaVersion: Int = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+    val dataRevision: Long = 0L,
     val scaler: FeatureScaler,
     val ratingMean: List<Double>,
     val ratingCovariance: List<Double> = emptyList(),
@@ -44,7 +45,7 @@ internal data class ReplayMetadata(
  * rather than per candidate.
  */
 internal class DecodedModel(
-    val schemaVersion: Int,
+    val dataRevision: Long,
     val scaler: FeatureScaler,
     val ratingPosterior: RatingPosterior,
     val thermalPosterior: ThermalPosterior,
@@ -86,23 +87,20 @@ internal class DecodedModel(
 
         internal fun flattenVector(vector: D1Array<Double>): List<Double> = List(vector.size) { idx -> vector[idx] }
 
-        @Suppress("TooGenericExceptionCaught") // malformed persisted JSON should safely fall back rather than crash ranking
+        @Suppress("TooGenericExceptionCaught") // malformed or legacy persisted JSON safely falls back rather than crashing ranking
         fun decode(state: ModelState?): DecodedModel? {
-            val validState = state?.takeIf { it.schemaVersion == ModelState.CURRENT_SCHEMA_VERSION }
+            val validState = state?.takeIf { it.sampleCount > 0 && it.coefficientsJson.isNotBlank() }
             return validState?.let {
                 try {
-                    val artifact = artifactJson.decodeFromString<RecommendationModelArtifact>(it.artifactJson)
-                    buildDecodedModel(it.schemaVersion, artifact)
+                    val artifact = artifactJson.decodeFromString<RecommendationModelArtifact>(it.coefficientsJson)
+                    buildDecodedModel(artifact)
                 } catch (_: Exception) {
                     null
                 }
             }
         }
 
-        private fun buildDecodedModel(
-            schemaVersion: Int,
-            artifact: RecommendationModelArtifact,
-        ): DecodedModel? {
+        private fun buildDecodedModel(artifact: RecommendationModelArtifact): DecodedModel? {
             if (!isValidArtifact(artifact)) return null
             val d = FeatureExtractor.CORE_FEATURE_COUNT + artifact.activePieceIds.size
             val ratingMean = mk.ndarray(artifact.ratingMean.toDoubleArray())
@@ -112,7 +110,7 @@ internal class DecodedModel(
                 decodeMatrix(artifact.thermalCovariance, d)
                     ?: BayesianThermalModel.prior(d, artifact.thermalThreshold).covariance
             return DecodedModel(
-                schemaVersion = schemaVersion,
+                dataRevision = artifact.dataRevision,
                 scaler = artifact.scaler,
                 ratingPosterior = RatingPosterior(ratingMean, ratingCov),
                 thermalPosterior = ThermalPosterior(thermalMean, thermalCov, artifact.thermalThreshold),

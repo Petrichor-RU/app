@@ -36,23 +36,19 @@ internal data class BayesianRatingStep(
 )
 
 private const val FIRST_INTERACTION_INDEX = 7
-private const val LAST_CORE_INTERACTION_INDEX = 9
 
-@Suppress("LongParameterList") // maps schema v3 feature blocks to their diagonal prior variances
 internal fun buildPriorVariances(
     dimension: Int,
     offsetVariance: Double,
     linearVariance: Double,
     interactionVariance: Double,
-    conditionVariance: Double,
     garmentVariance: Double,
 ): DoubleArray =
     DoubleArray(dimension) { index ->
         when {
             index == 0 -> offsetVariance
             index < FIRST_INTERACTION_INDEX -> linearVariance
-            index <= LAST_CORE_INTERACTION_INDEX -> interactionVariance
-            index < FeatureExtractor.CORE_FEATURE_COUNT -> conditionVariance
+            index < FeatureExtractor.CORE_FEATURE_COUNT -> interactionVariance
             else -> garmentVariance
         }
     }
@@ -62,10 +58,10 @@ internal fun buildPriorVariances(
  * arrays.
  *
  * Models residuals around [priorPrediction] with diagonal prior covariance: wide on personal
- * offset (`0`), moderate on linear (`1..6`) and condition/protection (`10..13`) effects, narrower
- * on interactions (`7..9`), and strongly shrunk on active per-garment dry residuals (`14+`) with
- * variance [GARMENT_PRIOR_VARIANCE]. Unseen or rarely worn pieces inherit zero residual mean while
- * retaining [GARMENT_PRIOR_VARIANCE] epistemic variance per piece.
+ * offset (`0`), moderate on linear terms (`1..6`), narrower on interactions (`7..9`), and
+ * strongly shrunk on active per-garment residuals (`10+`) with variance [GARMENT_PRIOR_VARIANCE].
+ * Unseen or rarely worn pieces inherit zero residual mean while retaining [GARMENT_PRIOR_VARIANCE]
+ * epistemic variance per piece.
  */
 internal object BayesianRatingModel {
     const val DEFAULT_OBSERVATION_VARIANCE = 0.64
@@ -74,7 +70,6 @@ internal object BayesianRatingModel {
     const val GARMENT_PRIOR_VARIANCE = 0.08
     private const val LINEAR_PRIOR_VARIANCE = 0.8
     private const val INTERACTION_PRIOR_VARIANCE = 0.4
-    private const val CONDITION_PRIOR_VARIANCE = 0.8
     private const val MIN_VARIANCE = 1e-9
 
     fun priorPrediction(raw: RawOutfitSignals): Double {
@@ -88,7 +83,6 @@ internal object BayesianRatingModel {
             offsetVariance = OFFSET_PRIOR_VARIANCE,
             linearVariance = LINEAR_PRIOR_VARIANCE,
             interactionVariance = INTERACTION_PRIOR_VARIANCE,
-            conditionVariance = CONDITION_PRIOR_VARIANCE,
             garmentVariance = GARMENT_PRIOR_VARIANCE,
         )
 
@@ -210,21 +204,8 @@ internal object BayesianRatingModel {
         isRainy: Boolean,
         pieces: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
-        windSpeedMs: Double? = null,
-        precipitationProbability: Double? = null,
-        rainVolumeMm: Double? = null,
     ): RatingPrediction {
-        val extracted =
-            FeatureExtractor.extractForModel(
-                model,
-                tempC,
-                isRainy,
-                pieces,
-                typeById,
-                windSpeedMs,
-                precipitationProbability,
-                rainVolumeMm,
-            )
+        val extracted = FeatureExtractor.extractForModel(model, tempC, isRainy, pieces, typeById)
         return predict(model.ratingPosterior, extracted.raw, extracted.features, unseenPieceCount = extracted.unseenPieceIds.size)
     }
 }

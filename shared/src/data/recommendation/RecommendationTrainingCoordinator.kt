@@ -38,8 +38,8 @@ data class TrainingSnapshot(
 
 /**
  * Single-flight, coalesced coordinator for recommendation model retraining.
- * Concurrent triggers (surveys, outfit edits, deletions, clothing metadata corrections)
- * coalesce via a conflated channel and never overwrite newer revisions with stale results.
+ * Concurrent triggers (surveys, outfit edits, deletions) coalesce via a conflated channel
+ * and never overwrite newer revisions with stale results.
  */
 class RecommendationTrainingCoordinator(
     private val outfitDao: OutfitDao = defaultOutfitDao(),
@@ -47,7 +47,6 @@ class RecommendationTrainingCoordinator(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val appScope: CoroutineScope = recommendationAppScope,
     private val clock: Clock = Clock.System,
-    private val activeSchemaVersion: Int = ModelState.CURRENT_SCHEMA_VERSION,
     private val trainer: suspend (TrainingSnapshot) -> ModelState? = BayesianModelTrainer::train,
 ) {
     private val triggerChannel = Channel<Unit>(Channel.CONFLATED)
@@ -66,19 +65,19 @@ class RecommendationTrainingCoordinator(
     /**
      * Checks whether the persisted model is missing, uses an outdated schema, predates the
      * newest survey, or disagrees with usable entry count (including when all usable entries
-     * were deleted) and triggers a retrain/clear if needed.
+     * were deleted) and triggers a retrain or clear if needed.
      */
     fun ensureModelFresh() {
         appScope.launch(ioDispatcher) {
             val state = outfitDao.getModelState()
             val newestSurvey = outfitDao.getNewestSurveyEpochMs()
-            val usableCount = outfitDao.countUsableTrainingEntries().first()
+            val usableCount = outfitDao.getTrainingEntries().count(BayesianModelTrainer::isUsableTrainingEntry)
+            val decoded = DecodedModel.decode(state)
             val needsUpdate =
                 when {
-                    usableCount == 0 -> state != null
-                    state == null -> true
-                    state.schemaVersion != activeSchemaVersion -> true
-                    state.usableSampleCount != usableCount -> true
+                    usableCount == 0 -> decoded != null
+                    decoded == null -> true
+                    state?.sampleCount != usableCount -> true
                     newestSurvey != null && state.trainedAtEpochMs < newestSurvey -> true
                     else -> false
                 }
@@ -112,17 +111,18 @@ class RecommendationTrainingCoordinator(
         // Only publish if no newer data change arrived while reading/training.
         if (_dataRevision.value == capturedRevision) {
             withContext(ioDispatcher) {
-                if (nextState == null) {
-                    outfitDao.deleteModelState()
-                } else {
+                if (nextState != null) {
                     outfitDao.insertModelState(nextState)
+                } else if (DecodedModel.decode(snapshot.previousState) != null) {
+                    outfitDao.insertModelState(
+                        ModelState(
+                            coefficientsJson = "",
+                            trainedAtEpochMs = snapshot.trainedAtEpochMs,
+                            sampleCount = 0,
+                        ),
+                    )
                 }
             }
         }
     }
-}
-
-/** Shared production coordinator instance so wardrobe and journal mutations coalesce together. */
-internal object SharedTrainingCoordinator {
-    val instance: RecommendationTrainingCoordinator by lazy { RecommendationTrainingCoordinator() }
 }

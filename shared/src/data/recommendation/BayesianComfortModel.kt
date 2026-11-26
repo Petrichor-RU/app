@@ -41,21 +41,8 @@ internal object BayesianComfortModel {
         isRainy: Boolean,
         pieces: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
-        windSpeedMs: Double? = null,
-        precipitationProbability: Double? = null,
-        rainVolumeMm: Double? = null,
     ): ComfortPrediction {
-        val extracted =
-            FeatureExtractor.extractForModel(
-                model,
-                tempC,
-                isRainy,
-                pieces,
-                typeById,
-                windSpeedMs,
-                precipitationProbability,
-                rainVolumeMm,
-            )
+        val extracted = FeatureExtractor.extractForModel(model, tempC, isRainy, pieces, typeById)
         return predict(
             model.ratingPosterior,
             model.thermalPosterior,
@@ -94,31 +81,28 @@ internal object BayesianModelTrainer {
             { it.entry.id },
         )
 
+    fun isUsableTrainingEntry(item: OutfitEntryWithPieces): Boolean =
+        item.hasKnownPieces &&
+            entryTemperature(item.entry) != null &&
+            item.entry.surveyFeelingScore != null
+
     fun train(snapshot: TrainingSnapshot): ModelState? {
         val typeById = snapshot.clothingTypes.associateBy { it.id }
-        val usable =
-            snapshot.entries
-                .filter { item ->
-                    item.hasKnownPieces &&
-                        entryTemperature(item.entry) != null &&
-                        item.entry.surveyFeelingScore != null
-                }.sortedWith(chronologicalOrder)
+        val usable = snapshot.entries.filter(::isUsableTrainingEntry).sortedWith(chronologicalOrder)
         if (usable.isEmpty()) return null
 
         val activePieceIds = FeatureExtractor.selectActivePieceIds(usable)
         val previousDecoded = DecodedModel.decode(snapshot.previousState)
         val artifact =
             if (canApplyIncrementalStep(previousDecoded, usable, typeById, activePieceIds)) {
-                updateIncrementally(previousDecoded!!, usable, typeById)
+                updateIncrementally(previousDecoded!!, usable, typeById, snapshot.dataRevision)
             } else {
-                replayFromPrior(usable, typeById, activePieceIds)
+                replayFromPrior(usable, typeById, activePieceIds, snapshot.dataRevision)
             }
         return ModelState(
-            schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
-            dataRevision = snapshot.dataRevision,
+            coefficientsJson = Json.encodeToString(artifact),
             trainedAtEpochMs = snapshot.trainedAtEpochMs,
-            usableSampleCount = usable.size,
-            artifactJson = Json.encodeToString(artifact),
+            sampleCount = usable.size,
         )
     }
 
@@ -139,6 +123,7 @@ internal object BayesianModelTrainer {
         previous: DecodedModel,
         usable: List<OutfitEntryWithPieces>,
         typeById: Map<Long, ClothingType>,
+        dataRevision: Long,
     ): RecommendationModelArtifact {
         val newest = usable.last()
         val raw = extractTrainingRaw(newest, typeById)
@@ -153,13 +138,14 @@ internal object BayesianModelTrainer {
                 activePieceIndexById = previous.activePieceIndexById,
                 deltaDays = deltaDays,
             )
-        return buildArtifact(previous.scaler, nextRating, nextThermal, previous.activePieceIds, usable, typeById)
+        return buildArtifact(previous.scaler, nextRating, nextThermal, previous.activePieceIds, usable, typeById, dataRevision)
     }
 
     private fun replayFromPrior(
         usable: List<OutfitEntryWithPieces>,
         typeById: Map<Long, ClothingType>,
         activePieceIds: List<Long>,
+        dataRevision: Long,
     ): RecommendationModelArtifact {
         val activePieceIndexById = activePieceIds.withIndex().associate { (index, pieceId) -> pieceId to index }
         val rawList = usable.map { item -> extractTrainingRaw(item, typeById) }
@@ -179,7 +165,7 @@ internal object BayesianModelTrainer {
             thermal = nextThermal
         }
 
-        return buildArtifact(scaler, rating, thermal, activePieceIds, usable, typeById)
+        return buildArtifact(scaler, rating, thermal, activePieceIds, usable, typeById, dataRevision)
     }
 
     @Suppress("LongParameterList") // single observation update shared by replay and incremental paths
@@ -194,7 +180,6 @@ internal object BayesianModelTrainer {
     ): Pair<RatingPosterior, ThermalPosterior> {
         val entry = item.entry
         val features = FeatureExtractor.buildFeatures(raw, scaler, item.pieces, activePieceIndexById)
-        val obsWeight = contextObservationWeight(entry)
         val residual = entry.surveyFeelingScore!!.toDouble() - BayesianRatingModel.priorPrediction(raw)
         val nextRating =
             BayesianRatingModel.update(
@@ -202,7 +187,6 @@ internal object BayesianModelTrainer {
                 features = features,
                 residual = residual,
                 deltaDays = deltaDays,
-                observationVariance = BayesianRatingModel.DEFAULT_OBSERVATION_VARIANCE / obsWeight,
             )
         val nextThermal =
             entry.surveyWarmthVerdict?.let { verdict ->
@@ -211,7 +195,6 @@ internal object BayesianModelTrainer {
                     raw = raw,
                     features = features,
                     verdict = verdict,
-                    observationVariance = 1.0 / obsWeight,
                 )
             } ?: thermal
         return nextRating to nextThermal
@@ -227,14 +210,10 @@ internal object BayesianModelTrainer {
             isRainy = entry.isRainy,
             pieces = item.pieces,
             typeById = typeById,
-            windSpeedMs = entry.windSpeedMs,
-            precipitationProbability = entry.precipitationProbability,
-            rainVolumeMm = entry.rainVolumeMm,
-            rainExposureOverride = effectiveTrainingRainExposure(entry),
         )
     }
 
-    @Suppress("LongParameterList") // artifact builder aggregates posterior state and replay metadata
+    @Suppress("LongParameterList") // artefact builder aggregates posterior state and replay metadata
     private fun buildArtifact(
         scaler: FeatureScaler,
         rating: RatingPosterior,
@@ -242,10 +221,12 @@ internal object BayesianModelTrainer {
         activePieceIds: List<Long>,
         usable: List<OutfitEntryWithPieces>,
         typeById: Map<Long, ClothingType>,
+        dataRevision: Long,
     ): RecommendationModelArtifact {
         val last = usable.last()
         return RecommendationModelArtifact(
             featureSchemaVersion = FeatureExtractor.FEATURE_SCHEMA_VERSION,
+            dataRevision = dataRevision,
             scaler = scaler,
             ratingMean = DecodedModel.flattenVector(rating.mean),
             ratingCovariance = DecodedModel.flattenMatrix(rating.covariance),
@@ -276,29 +257,15 @@ internal object BayesianModelTrainer {
             mix(e.surveyedAtEpochMs ?: -1L)
             mix(entryTemperature(e)?.toBits() ?: 0L)
             mix(if (e.isRainy) 1L else 0L)
-            mix(e.windSpeedMs?.toBits() ?: -1L)
-            mix(e.precipitationProbability?.toBits() ?: -1L)
-            mix(e.rainVolumeMm?.toBits() ?: -1L)
             mix((e.surveyFeelingScore ?: -1).toLong())
             mix((e.surveyWarmthVerdict?.ordinal ?: -1).toLong())
-            mix(triStateCode(e.mostlyIndoors))
-            mix(triStateCode(e.highActivity))
-            mix(triStateCode(e.gotWet))
             for (piece in item.pieces.sortedBy { it.id }) {
                 mix(piece.id)
                 mix(piece.typeId)
                 mix(piece.material.ordinal.toLong())
-                mix(piece.weatherProtection.ordinal.toLong())
                 mix((typeById[piece.typeId]?.supertype?.ordinal ?: -1).toLong())
             }
         }
         return hash
     }
-
-    private fun triStateCode(flag: Boolean?): Long =
-        when (flag) {
-            true -> 1L
-            false -> 0L
-            null -> -1L
-        }
 }

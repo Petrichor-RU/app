@@ -39,9 +39,6 @@ internal object Scoring {
                     isRainy = input.isRainy,
                     pieces = candidate.pieces,
                     typeById = context.typeById,
-                    windSpeedMs = input.windSpeedMs,
-                    precipitationProbability = input.precipitationProbability,
-                    rainVolumeMm = input.rainVolumeMm,
                 )
             val comfort =
                 BayesianComfortModel.predict(
@@ -104,9 +101,6 @@ internal object Scoring {
                     isRainy = input.isRainy,
                     pieces = pieces,
                     typeById = typeById,
-                    windSpeedMs = input.windSpeedMs,
-                    precipitationProbability = input.precipitationProbability,
-                    rainVolumeMm = input.rainVolumeMm,
                 ).mean
         }
     }

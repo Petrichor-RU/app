@@ -272,8 +272,7 @@ class BayesianComfortModelTest {
             outfitDao.entries.value = entries
             outfitDao.links += entries.flatMap { e -> e.pieces.map { p -> OutfitEntryPiece(e.entry.id, p.id) } }
 
-            val coordinator = RecommendationTrainingCoordinator(outfitDao, clothingDao, dispatcher, appScope = this)
-            val repo = OutfitLogRepository(outfitDao, clothingDao, dispatcher, imageDeleter = {}, appScope = this, coordinator)
+            val repo = OutfitLogRepository(outfitDao, clothingDao, dispatcher, imageDeleter = {}, appScope = this)
 
             val editedThird = entries[2].entry.copy(surveyFeelingScore = 1, surveyWarmthVerdict = WarmthVerdict.TOO_WARM)
             repo.updateOutfit(editedThird, entries[2].pieces)

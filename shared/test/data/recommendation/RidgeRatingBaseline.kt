@@ -13,7 +13,7 @@ import org.jetbrains.kotlinx.multik.ndarray.data.get
 import org.jetbrains.kotlinx.multik.ndarray.data.set
 
 /**
- * Phase 2 batch ridge baseline retained strictly in test code for ablation comparisons in
+ * Batch ridge baseline retained strictly in test code for ablation comparisons in
  * [EvaluationHarness] and zero-drift Kalman equivalence checks in [BayesianComfortModelTest].
  */
 internal object RidgeRatingBaseline {
@@ -74,20 +74,8 @@ internal object RidgeRatingBaseline {
         isRainy: Boolean,
         pieces: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
-        windSpeedMs: Double? = null,
-        precipitationProbability: Double? = null,
-        rainVolumeMm: Double? = null,
     ): Double {
-        val raw =
-            FeatureExtractor.extractRaw(
-                tempC = tempC,
-                isRainy = isRainy,
-                pieces = pieces,
-                typeById = typeById,
-                windSpeedMs = windSpeedMs,
-                precipitationProbability = precipitationProbability,
-                rainVolumeMm = rainVolumeMm,
-            )
+        val raw = FeatureExtractor.extractRaw(tempC, isRainy, pieces, typeById)
         val features = FeatureExtractor.buildCoreFeatures(raw, model.scaler)
         val mean = model.ratingPosterior.mean
         val coreWeights =

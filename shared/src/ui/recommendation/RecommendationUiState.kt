@@ -13,5 +13,4 @@ internal class RecommendationUiState(
     val candidates: List<OutfitCandidate>,
     val clothingTypes: List<ClothingType>,
     val laundryVersion: Int,
-    val selectedDate: LocalDate = today,
 )

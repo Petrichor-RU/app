@@ -1,16 +1,12 @@
 package nl.petrichor.app.data.recommendation
 
 import kotlinx.datetime.LocalDate
-import kotlinx.serialization.Serializable
-import nl.petrichor.app.data.outfit.RecommendationImpression
 import org.jetbrains.kotlinx.multik.ndarray.data.D2Array
 import kotlin.math.sqrt
 import kotlin.random.Random
-import kotlin.time.Clock
 
-/** One recorded slot inside [RecommendationImpression.candidatesJson] for offline IPS evaluation. */
-@Serializable
-data class CandidateImpressionSlot(
+/** Per-slot scoring metadata attached to a [RankedSlate]. */
+data class RankedSlateSlot(
     val slotIndex: Int,
     val pieceIds: List<Long>,
     val source: RecommendationSource,
@@ -24,10 +20,10 @@ data class CandidateImpressionSlot(
     val thermalEpistemicStd: Double,
 )
 
-/** Ranked recommendation slate paired with per-slot metadata for logging and testing. */
+/** Ranked recommendation slate paired with per-slot metadata. */
 data class RankedSlate(
     val candidates: List<OutfitCandidate>,
-    val slots: List<CandidateImpressionSlot>,
+    val slots: List<RankedSlateSlot>,
     val policyName: String,
     val isExplorationSlate: Boolean,
 )
@@ -59,8 +55,7 @@ private sealed interface CandidateDedupKey {
 /**
  * Ranks evaluated candidates into a conservative 3-slot slate: Slots 1 and 2 always use
  * posterior-mean ranking, while Slot 3 optionally explores among safe uncertain candidates via
- * constrained Thompson sampling (`theta = m + L * z`) and records empirical propensities for
- * offline Inverse Propensity Scoring (Li et al., 2010).
+ * constrained Thompson sampling (`theta = m + L * z`).
  */
 internal object ExplorationPolicy {
     const val POLICY_CONSTRAINED_THOMPSON = "CONSTRAINED_THOMPSON_V1"
@@ -116,7 +111,7 @@ internal object ExplorationPolicy {
                 .distinctBy { dedupKey(it.candidate) }
         val sessionRandom =
             if (context.input.random === Random.Default) {
-                sessionRandom(context.input.date, context.input.modelState?.dataRevision ?: 0L)
+                sessionRandom(context.input.date, context.decodedModel?.dataRevision ?: 0L)
             } else {
                 context.input.random
             }
@@ -138,7 +133,7 @@ internal object ExplorationPolicy {
             val top = dedupedSorted.take(RecommendationEngine.MAX_CANDIDATES)
             return RankedSlate(
                 candidates = top.map { it.candidate },
-                slots = top.mapIndexed { idx, eval -> toImpressionSlot(idx, eval, isExploration = false, propensity = 1.0) },
+                slots = top.mapIndexed { idx, eval -> toSlateSlot(idx, eval, isExploration = false, propensity = 1.0) },
                 policyName = resolvePolicyName(context.mode),
                 isExplorationSlate = false,
             )
@@ -157,7 +152,7 @@ internal object ExplorationPolicy {
             val greedyTop = listOf(slot1, slot2, remaining.first())
             RankedSlate(
                 candidates = greedyTop.map { it.candidate },
-                slots = greedyTop.mapIndexed { idx, eval -> toImpressionSlot(idx, eval, isExploration = false, propensity = 1.0) },
+                slots = greedyTop.mapIndexed { idx, eval -> toSlateSlot(idx, eval, isExploration = false, propensity = 1.0) },
                 policyName = POLICY_GREEDY,
                 isExplorationSlate = false,
             )
@@ -168,9 +163,9 @@ internal object ExplorationPolicy {
                 candidates = chosenList.map { it.candidate },
                 slots =
                     listOf(
-                        toImpressionSlot(0, slot1, isExploration = false, propensity = 1.0),
-                        toImpressionSlot(1, slot2, isExploration = false, propensity = 1.0),
-                        toImpressionSlot(2, exploredSlot, isExploration = true, propensity = propensity),
+                        toSlateSlot(0, slot1, isExploration = false, propensity = 1.0),
+                        toSlateSlot(1, slot2, isExploration = false, propensity = 1.0),
+                        toSlateSlot(2, exploredSlot, isExploration = true, propensity = propensity),
                     ),
                 policyName = POLICY_CONSTRAINED_THOMPSON,
                 isExplorationSlate = true,
@@ -199,14 +194,14 @@ internal object ExplorationPolicy {
             else -> CandidateDedupKey.SuggestionOnly(candidate.generalSuggestion)
         }
 
-    private fun toImpressionSlot(
+    private fun toSlateSlot(
         slotIndex: Int,
         eval: EvaluatedCandidate,
         isExploration: Boolean,
         propensity: Double,
-    ): CandidateImpressionSlot {
+    ): RankedSlateSlot {
         val comfort = eval.comfort
-        return CandidateImpressionSlot(
+        return RankedSlateSlot(
             slotIndex = slotIndex,
             pieceIds = eval.candidate.pieces.map { it.id },
             source = eval.candidate.source,
@@ -220,26 +215,6 @@ internal object ExplorationPolicy {
             thermalEpistemicStd = comfort?.thermal?.epistemicStd ?: 0.0,
         )
     }
-
-    fun buildImpressionEntity(
-        slate: RankedSlate,
-        input: RecommendationInput,
-        locationName: String?,
-        candidatesJson: String,
-        shownAtEpochMs: Long = Clock.System.now().toEpochMilliseconds(),
-    ): RecommendationImpression =
-        RecommendationImpression(
-            shownAtEpochMs = shownAtEpochMs,
-            targetDate = input.date,
-            locationName = locationName,
-            tempC = input.tempC,
-            isRainy = input.isRainy,
-            windSpeedMs = input.windSpeedMs,
-            modelSchemaVersion = input.modelState?.schemaVersion ?: 0,
-            modelDataRevision = input.modelState?.dataRevision ?: 0L,
-            policyName = slate.policyName,
-            candidatesJson = candidatesJson,
-        )
 }
 
 private object ThompsonSampler {

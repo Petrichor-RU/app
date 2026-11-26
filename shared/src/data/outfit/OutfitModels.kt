@@ -37,15 +37,6 @@ data class OutfitEntry(
     // laundry (epoch ms until which this outfit is blocked; 0 = clean)
     val laundryUntilEpochMs: Long = 0,
     val createdAtEpochMs: Long = 0,
-    val windSpeedMs: Double? = null,
-    val humidity: Int? = null,
-    val precipitationProbability: Double? = null,
-    val rainVolumeMm: Double? = null,
-    val weatherCapturedAtEpochMs: Long? = null,
-    val locationName: String? = null,
-    val mostlyIndoors: Boolean? = null,
-    val highActivity: Boolean? = null,
-    val gotWet: Boolean? = null,
 )
 
 @Entity(
@@ -91,37 +82,7 @@ data class OutfitEntryWithPieces(
 @Entity(tableName = "model_state")
 data class ModelState(
     @PrimaryKey val id: Long = 1, // singleton row
-    val schemaVersion: Int,
-    val dataRevision: Long,
+    val coefficientsJson: String, // kotlinx-serialization List<Double>
     val trainedAtEpochMs: Long,
-    val usableSampleCount: Int,
-    val artifactJson: String, // kotlinx.serialization RecommendationModelArtifact
-) {
-    companion object {
-        const val CURRENT_SCHEMA_VERSION = 4
-    }
-}
-
-/**
- * Logged recommendation slate (top-3 candidates, predicted probabilities, epistemic uncertainties,
- * and exploration propensities) used for unbiased offline IPS evaluation. Unchosen suggestions never
- * produce negative posterior updates.
- */
-@Entity(
-    tableName = "recommendation_impressions",
-    indices = [Index("targetDate"), Index("wornEntryId")],
-)
-data class RecommendationImpression(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val shownAtEpochMs: Long,
-    val targetDate: LocalDate,
-    val locationName: String?,
-    val tempC: Double?,
-    val isRainy: Boolean,
-    val windSpeedMs: Double?,
-    val modelSchemaVersion: Int,
-    val modelDataRevision: Long,
-    val policyName: String,
-    val candidatesJson: String,
-    val wornEntryId: Long? = null,
+    val sampleCount: Int,
 )

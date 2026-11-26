@@ -41,9 +41,9 @@ internal data class BayesianThermalStep(
 /**
  * Online ordinal probit model using Assumed-Density Filtering (Chu & Ghahramani / Minka)
  * with unit observation noise `sigma = 1` and symmetric thresholds `(-tau, +tau)`.
- * Uses pooled rain/wind condition priors (`10..13`) and strongly shrunk per-garment dry-warmth
- * residuals (`14+`) with variance [GARMENT_PRIOR_VARIANCE]; unseen or rarely worn pieces retain
- * zero residual mean and [GARMENT_PRIOR_VARIANCE] epistemic variance.
+ * Uses strongly shrunk per-garment warmth residuals (`10+`) with variance [GARMENT_PRIOR_VARIANCE];
+ * unseen or rarely worn pieces retain zero residual mean and [GARMENT_PRIOR_VARIANCE] epistemic
+ * variance.
  */
 internal object BayesianThermalModel {
     const val DEFAULT_THRESHOLD = 0.75
@@ -56,7 +56,6 @@ internal object BayesianThermalModel {
     private const val OFFSET_PRIOR_VARIANCE = 0.8
     private const val LINEAR_PRIOR_VARIANCE = 0.15
     private const val INTERACTION_PRIOR_VARIANCE = 0.06
-    private const val CONDITION_PRIOR_VARIANCE = 0.4
     private const val MIN_VARIANCE = 1e-9
     private const val TAIL_GUARD_Z = 6.0
     private const val MAX_DELTA2 = 0.999999
@@ -67,7 +66,6 @@ internal object BayesianThermalModel {
             offsetVariance = OFFSET_PRIOR_VARIANCE,
             linearVariance = LINEAR_PRIOR_VARIANCE,
             interactionVariance = INTERACTION_PRIOR_VARIANCE,
-            conditionVariance = CONDITION_PRIOR_VARIANCE,
             garmentVariance = GARMENT_PRIOR_VARIANCE,
         )
 
@@ -161,21 +159,8 @@ internal object BayesianThermalModel {
         isRainy: Boolean,
         pieces: List<ClothingPiece>,
         typeById: Map<Long, ClothingType>,
-        windSpeedMs: Double? = null,
-        precipitationProbability: Double? = null,
-        rainVolumeMm: Double? = null,
     ): ThermalProbabilities {
-        val extracted =
-            FeatureExtractor.extractForModel(
-                model,
-                tempC,
-                isRainy,
-                pieces,
-                typeById,
-                windSpeedMs,
-                precipitationProbability,
-                rainVolumeMm,
-            )
+        val extracted = FeatureExtractor.extractForModel(model, tempC, isRainy, pieces, typeById)
         return predict(model.thermalPosterior, extracted.raw, extracted.features, unseenPieceCount = extracted.unseenPieceIds.size)
     }
 

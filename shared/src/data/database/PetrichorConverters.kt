@@ -5,7 +5,6 @@ import kotlinx.datetime.LocalDate
 import nl.petrichor.app.data.outfit.WarmthVerdict
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.Material
-import nl.petrichor.app.data.wardrobe.WeatherProtection
 
 class PetrichorConverters {
     @ColumnTypeConverter
@@ -13,13 +12,6 @@ class PetrichorConverters {
 
     @ColumnTypeConverter
     fun stringToMaterial(value: String): Material = Material.entries.firstOrNull { it.name == value } ?: Material.UNKNOWN
-
-    @ColumnTypeConverter
-    fun weatherProtectionToString(protection: WeatherProtection): String = protection.name
-
-    @ColumnTypeConverter
-    fun stringToWeatherProtection(value: String): WeatherProtection =
-        WeatherProtection.entries.firstOrNull { it.name == value } ?: WeatherProtection.NONE
 
     @ColumnTypeConverter
     fun supertypeToString(supertype: ClothingSupertype): String = supertype.name

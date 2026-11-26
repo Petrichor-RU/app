@@ -1,7 +1,6 @@
 package nl.petrichor.app.data.outfit
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.yield
 import kotlinx.datetime.LocalDate
@@ -20,29 +19,27 @@ import kotlin.test.assertTrue
 
 class OutfitLogRepositoryTest {
     @Test
-    fun `logging a new outfit stamps createdAt and links the pieces in one insert`() =
+    fun `logging an outfit stamps createdAt and links pieces in order`() =
         runTest {
             val dao = FakeOutfitDao()
             val repository = OutfitLogRepository(dao, FakeClothingDao(), Dispatchers.Unconfined, imageDeleter = {})
-            val entry = entry(createdAtEpochMs = 0L)
-            val pieces = listOf(piece(11L), piece(12L))
+            val pieces = listOf(piece(10L), piece(20L), piece(30L))
 
-            val id = repository.logOutfit(entry, pieces)
+            val id = repository.logOutfit(entry(createdAtEpochMs = 0L), pieces)
 
             assertTrue(id > 0L)
-            val inserted = dao.insertedEntries.single()
-            assertTrue(inserted.createdAtEpochMs > 0L)
-            assertEquals(
-                listOf(
-                    OutfitEntryPiece(entryId = id, pieceId = 11L, orderIndex = 0),
-                    OutfitEntryPiece(entryId = id, pieceId = 12L, orderIndex = 1),
-                ),
-                dao.insertedLinks.single(),
-            )
+            val stored = dao.insertedEntries.single()
+            assertTrue(stored.createdAtEpochMs > 0L)
+            val linkedPieceIds =
+                dao.links
+                    .filter { it.entryId == id }
+                    .sortedBy { it.orderIndex }
+                    .map { it.pieceId }
+            assertEquals(listOf(10L, 20L, 30L), linkedPieceIds)
         }
 
     @Test
-    fun `logging an existing outfit preserves its creation timestamp`() =
+    fun `logging an outfit preserves an existing createdAt timestamp`() =
         runTest {
             val dao = FakeOutfitDao()
             val repository = OutfitLogRepository(dao, FakeClothingDao(), Dispatchers.Unconfined, imageDeleter = {})
@@ -84,11 +81,11 @@ class OutfitLogRepositoryTest {
             // retrain ran in the background scope and persisted a model state row
             val model = dao.modelStates.lastOrNull()
             assertNotNull(model)
-            assertEquals(1, model.usableSampleCount)
+            assertEquals(1, model.sampleCount)
         }
 
     @Test
-    fun `selfie-only surveyed entry does not train garment model and is excluded from usableTrainingCount`() =
+    fun `selfie-only surveyed entry does not train garment model`() =
         runTest {
             val dao = FakeOutfitDao()
             dao.entries.value = listOf(entryWithSurvey(id = 6L, score = null, minTempC = 10.0, maxTempC = 20.0, temperatureC = 15.0))
@@ -98,7 +95,6 @@ class OutfitLogRepositoryTest {
             repeat(5) { yield() }
 
             assertNull(dao.modelStates.lastOrNull())
-            assertEquals(0, repository.usableTrainingCount.first())
         }
 
     @Test
@@ -126,7 +122,7 @@ class OutfitLogRepositoryTest {
 
             val model = dao.modelStates.lastOrNull()
             assertNotNull(model)
-            assertEquals(1, model.usableSampleCount)
+            assertEquals(1, model.sampleCount)
         }
 
     @Test
@@ -232,26 +228,6 @@ class OutfitLogRepositoryTest {
         assertNull(snapshot.weatherDescription)
         assertNull(snapshot.weatherIcon)
         assertFalse(snapshot.isRainy)
-    }
-
-    @Test
-    fun `weather snapshot treats freezing rain conditionId 511 as rainy even with snow icon`() {
-        val today = LocalDate(2026, 11, 12)
-        val future = LocalDate(2026, 11, 13)
-        val weather =
-            weather().copy(
-                description = "Overcast clouds",
-                icon = "04d",
-                conditionId = 804,
-                forecast =
-                    listOf(
-                        ForecastDay("2026-11-12", min = 1, max = 4, icon = "04d", conditionId = 804),
-                        ForecastDay("2026-11-13", min = -1, max = 2, icon = "13d", conditionId = 511),
-                    ),
-            )
-
-        assertFalse(buildEntryWeatherSnapshot(weather, today, today).isRainy)
-        assertTrue(buildEntryWeatherSnapshot(weather, future, today).isRainy)
     }
 
     private fun entry(createdAtEpochMs: Long) =

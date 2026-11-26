@@ -42,14 +42,6 @@ interface OutfitDao {
     @Query("SELECT COUNT(*) FROM outfit_entries WHERE surveyFeelingScore IS NOT NULL")
     fun countSurveyed(): Flow<Int>
 
-    @Query(
-        "SELECT COUNT(*) FROM outfit_entries " +
-            "WHERE surveyFeelingScore IS NOT NULL " +
-            "AND (minTempC IS NOT NULL OR temperatureC IS NOT NULL) " +
-            "AND EXISTS (SELECT 1 FROM outfit_entry_pieces WHERE entryId = outfit_entries.id)",
-    )
-    fun countUsableTrainingEntries(): Flow<Int>
-
     @Transaction
     @Query(
         "SELECT * FROM outfit_entries WHERE surveyFeelingScore IS NOT NULL " +
@@ -84,17 +76,13 @@ interface OutfitDao {
 
     @Query(
         "UPDATE outfit_entries SET surveyFeelingScore = :score, surveyWarmthVerdict = :verdict, " +
-            "surveyedAtEpochMs = :surveyedAtEpochMs, mostlyIndoors = :mostlyIndoors, " +
-            "highActivity = :highActivity, gotWet = :gotWet WHERE id = :entryId",
+            "surveyedAtEpochMs = :surveyedAtEpochMs WHERE id = :entryId",
     )
     suspend fun setSurvey(
         entryId: Long,
         score: Int,
         verdict: WarmthVerdict,
         surveyedAtEpochMs: Long,
-        mostlyIndoors: Boolean? = null,
-        highActivity: Boolean? = null,
-        gotWet: Boolean? = null,
     )
 
     @Query("UPDATE outfit_entries SET laundryUntilEpochMs = :untilEpochMs WHERE id = :id")
@@ -114,19 +102,4 @@ interface OutfitDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertModelState(state: ModelState)
-
-    @Query("DELETE FROM model_state")
-    suspend fun deleteModelState()
-
-    @Insert
-    suspend fun insertRecommendationImpression(impression: RecommendationImpression): Long
-
-    @Query("SELECT * FROM recommendation_impressions WHERE targetDate = :targetDate ORDER BY shownAtEpochMs DESC, id DESC")
-    suspend fun getImpressionsForDate(targetDate: LocalDate): List<RecommendationImpression>
-
-    @Query("UPDATE recommendation_impressions SET wornEntryId = :entryId WHERE id = :impressionId")
-    suspend fun linkImpressionWornEntry(
-        impressionId: Long,
-        entryId: Long,
-    )
 }

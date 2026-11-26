@@ -10,7 +10,6 @@ import nl.petrichor.app.data.wardrobe.ClothingPiece
 import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.Material
-import nl.petrichor.app.data.wardrobe.WeatherProtection
 import kotlin.random.Random
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -33,13 +32,11 @@ class CandidateGeneratorTest {
         typeId: Long,
         material: Material = Material.COTTON,
         laundryUntil: Long = 0,
-        weatherProtection: WeatherProtection = WeatherProtection.NONE,
     ) = ClothingPiece(
         id = id,
         name = "p$id",
         typeId = typeId,
         material = material,
-        weatherProtection = weatherProtection,
         notes = null,
         imagePath = "",
         thumbnailPath = "",
@@ -79,14 +76,12 @@ class CandidateGeneratorTest {
         modelState: ModelState? = null,
         tempC: Double? = 10.0,
         isRainy: Boolean = false,
-        precipitationProbability: Double? = null,
         date: LocalDate = today,
     ) = RecommendationInput(
         date = date,
         today = today,
         tempC = tempC,
         isRainy = isRainy,
-        precipitationProbability = precipitationProbability,
         wardrobePieces = pieces,
         clothingTypes = types,
         entries = entries,
@@ -209,11 +204,9 @@ class CandidateGeneratorTest {
             )
         val modelState =
             ModelState(
-                schemaVersion = ModelState.CURRENT_SCHEMA_VERSION,
-                dataRevision = 1L,
+                coefficientsJson = Json.encodeToString(artifact),
                 trainedAtEpochMs = now,
-                usableSampleCount = 12,
-                artifactJson = Json.encodeToString(artifact),
+                sampleCount = 12,
             )
 
         val ranked =
@@ -230,41 +223,5 @@ class CandidateGeneratorTest {
         val loggedCandidate = ranked.first { it.loggedEntry?.entry?.id == 1L }
         assertTrue(loggedCandidate.pieces.any { it.id == 3L })
         assertFalse(loggedCandidate.pieces.any { it.id == 2L })
-    }
-
-    @Test
-    fun `offers rain-protective outer layers at 18C on rainy or high-PoP days while omitting non-protective outer layers`() {
-        val tee = piece(1, teeType.id, Material.COTTON)
-        val rainJacket = piece(2, jacketType.id, Material.POLYESTER, weatherProtection = WeatherProtection.WATER_RESISTANT)
-        val plainJacket = piece(3, jacketType.id, Material.WOOL, weatherProtection = WeatherProtection.NONE)
-        val jeans = piece(4, jeansType.id, Material.COTTON)
-        val pool = listOf(tee, rainJacket, plainJacket, jeans)
-
-        val rainyContext =
-            RecommendationScoringContext(
-                input = input(pieces = pool, tempC = 18.0, isRainy = true),
-                pool = pool,
-                typeById = typeById,
-                mode = RecommendationMode.HEURISTIC,
-                decodedModel = null,
-            )
-        val rainyCandidates = CandidateGenerator.generate(rainyContext)
-        assertTrue(rainyCandidates.any { it.pieces.any { p -> p.id == rainJacket.id } })
-        assertFalse(rainyCandidates.any { it.pieces.any { p -> p.id == plainJacket.id } })
-
-        val highPopContext =
-            rainyContext.copy(
-                input = input(pieces = pool, tempC = 18.0, isRainy = false, precipitationProbability = 0.75),
-            )
-        val highPopCandidates = CandidateGenerator.generate(highPopContext)
-        assertTrue(highPopCandidates.any { it.pieces.any { p -> p.id == rainJacket.id } })
-        assertFalse(highPopCandidates.any { it.pieces.any { p -> p.id == plainJacket.id } })
-
-        val dryWarmContext =
-            rainyContext.copy(
-                input = input(pieces = pool, tempC = 18.0, isRainy = false, precipitationProbability = 0.1),
-            )
-        val dryWarmCandidates = CandidateGenerator.generate(dryWarmContext)
-        assertFalse(dryWarmCandidates.any { it.pieces.any { p -> p.id == rainJacket.id || p.id == plainJacket.id } })
     }
 }

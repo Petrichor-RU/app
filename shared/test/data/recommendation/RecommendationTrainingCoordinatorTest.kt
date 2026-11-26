@@ -1,13 +1,11 @@
 package nl.petrichor.app.data.recommendation
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
 import nl.petrichor.app.data.outfit.FakeOutfitDao
-import nl.petrichor.app.data.outfit.ModelState
 import nl.petrichor.app.data.outfit.OutfitEntry
 import nl.petrichor.app.data.outfit.OutfitEntryPiece
 import nl.petrichor.app.data.outfit.OutfitEntryWithPieces
@@ -18,12 +16,10 @@ import nl.petrichor.app.data.wardrobe.ClothingSupertype
 import nl.petrichor.app.data.wardrobe.ClothingType
 import nl.petrichor.app.data.wardrobe.FakeClothingDao
 import nl.petrichor.app.data.wardrobe.Material
-import nl.petrichor.app.data.wardrobe.WardrobeRepository
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RecommendationTrainingCoordinatorTest {
@@ -98,10 +94,9 @@ class RecommendationTrainingCoordinatorTest {
 
             // Coalesced: trained once with final revision 5 (no stale intermediate runs published).
             assertEquals(listOf(5L), trainedRevisions)
-            val state = outfitDao.getModelState()
-            assertNotNull(state)
-            assertEquals(5L, state.dataRevision)
-            assertEquals(ModelState.CURRENT_SCHEMA_VERSION, state.schemaVersion)
+            val decoded = DecodedModel.decode(outfitDao.getModelState())
+            assertNotNull(decoded)
+            assertEquals(5L, decoded.dataRevision)
         }
 
     @Test
@@ -135,11 +130,11 @@ class RecommendationTrainingCoordinatorTest {
             advanceUntilIdle()
 
             // Revision 1 must not have been inserted; only revision 2 was persisted.
-            assertEquals(listOf(2L), outfitDao.modelStates.map { it.dataRevision })
+            assertEquals(listOf(2L), outfitDao.modelStates.mapNotNull { DecodedModel.decode(it)?.dataRevision })
         }
 
     @Test
-    fun `outfit update and clothing material or type edit retrain and deleting last entry clears model`() =
+    fun `outfit update retrains and deleting last usable entry invalidates model state`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val outfitDao = FakeOutfitDao()
@@ -151,13 +146,6 @@ class RecommendationTrainingCoordinatorTest {
             outfitDao.entries.value = listOf(entryWithPieces)
             outfitDao.links += OutfitEntryPiece(entryId = 1L, pieceId = 7L)
 
-            val coordinator =
-                RecommendationTrainingCoordinator(
-                    outfitDao = outfitDao,
-                    clothingDao = clothingDao,
-                    ioDispatcher = dispatcher,
-                    appScope = this,
-                )
             val outfitRepo =
                 OutfitLogRepository(
                     outfitDao = outfitDao,
@@ -165,41 +153,17 @@ class RecommendationTrainingCoordinatorTest {
                     ioDispatcher = dispatcher,
                     imageDeleter = {},
                     appScope = this,
-                    trainingCoordinator = coordinator,
-                )
-            val wardrobeRepo =
-                WardrobeRepository(
-                    clothingDao = clothingDao,
-                    outfitDao = outfitDao,
-                    ioDispatcher = dispatcher,
-                    imageDeleter = {},
-                    trainingCoordinator = coordinator,
                 )
 
             // 1. Outfit edit retrains.
             outfitRepo.updateOutfit(entryWithPieces.entry.copy(surveyFeelingScore = 5), listOf(piece))
             advanceUntilIdle()
-            assertEquals(1L, coordinator.dataRevision.value)
-            assertNotNull(outfitDao.getModelState())
+            assertNotNull(DecodedModel.decode(outfitDao.getModelState()))
 
-            // 2. Non-warmth clothing edit (name only) does NOT retrain.
-            val renamed = piece.copy(name = "Renamed tee")
-            wardrobeRepo.updateClothing(renamed)
-            advanceUntilIdle()
-            assertEquals(1L, coordinator.dataRevision.value)
-
-            // 3. Material edit on worn piece DOES retrain (Gate A).
-            wardrobeRepo.updateClothing(renamed.copy(material = Material.WOOL))
-            advanceUntilIdle()
-            assertEquals(2L, coordinator.dataRevision.value)
-            assertEquals(2L, outfitDao.getModelState()?.dataRevision)
-
-            // 4. Deleting the last usable entry clears ModelState cleanly.
+            // 2. Deleting the last usable entry invalidates ModelState cleanly.
             outfitRepo.deleteEntry(entryWithPieces.entry)
             advanceUntilIdle()
-            assertEquals(3L, coordinator.dataRevision.value)
-            assertNull(outfitDao.getModelState())
-            assertNull(outfitDao.observeModelState().first())
-            assertTrue(outfitDao.modelStates.isEmpty())
+            assertNull(DecodedModel.decode(outfitDao.getModelState()))
+            assertEquals(0, outfitDao.getModelState()?.sampleCount)
         }
 }
