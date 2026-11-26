@@ -56,10 +56,11 @@ class AffiliateFeedTest {
     fun `fetch returns the adapter items deduplicated by url and capped at max`() =
         runTest {
             val items =
-                (1..8).map { item("Hoodie $it", "https://www.flipkart.com/p/h$it") } + item(
-                    "Hoodie 1",
-                    "https://www.flipkart.com/p/h1"
-                )
+                (1..8).map { item("Hoodie $it", "https://www.flipkart.com/p/h$it") } +
+                    item(
+                        "Hoodie 1",
+                        "https://www.flipkart.com/p/h1",
+                    )
             val feed = feed({ _, _ -> items })
             val result = feed.fetch(mumbai, null)
             assertEquals(MAX_AFFILIATE_ITEMS, result.size)
@@ -111,7 +112,7 @@ class AffiliateFeedTest {
                     )
                 assertEquals(
                     emptyList(),
-                    feed.fetch(Place("Amsterdam", Coordinates(52.3, 4.9), countryCode = country), null)
+                    feed.fetch(Place("Amsterdam", Coordinates(52.3, 4.9), countryCode = country), null),
                 )
                 assertFalse(called, "adapter must not run for country=$country")
             }
@@ -410,7 +411,8 @@ class AffiliateFeedTest {
         assertTrue(positions.all { it in 1..merged.size })
         assertEquals(
             (1..10).map { it.toLong() },
-            merged.filterIsInstance<WardrobeGridEntry.UserItem>().map { it.piece.id })
+            merged.filterIsInstance<WardrobeGridEntry.UserItem>().map { it.piece.id },
+        )
     }
 
     @Test
