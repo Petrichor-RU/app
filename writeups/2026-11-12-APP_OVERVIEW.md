@@ -17,6 +17,7 @@ Current feature set:
 | Wardrobe: browse clothing items in a grid, add/edit/delete with photos | Implemented |
 | Wardrobe: filter by clothing type (dropdown) | Implemented |
 | Wardrobe: detail screen (full-screen overlay with open/close animations) | Implemented |
+| Wardrobe: sponsored affiliate items mixed into the grid (see 6.1a) | Implemented |
 | Weather tab: current conditions + 5-day forecast via OpenWeather | Implemented |
 | Location: search (OpenWeather geocoding), save, remove, reorder favorite locations | Implemented |
 | Location picker on the Weather tab (pick saved/searched/current location) | Implemented |
@@ -112,10 +113,41 @@ State: selection = `pagerState.currentPage`; no navigation library, no deep link
 
 ```kotlin
 Coordinates(latitude: Double, longitude: Double)   // @Serializable
-Place(name: String, coordinates: Coordinates)
+Place(name: String, coordinates: Coordinates, countryCode: String? = null)  // ISO-3166 alpha-2; null for legacy saved locations until reverse-geocoded
 WeatherSnapshot(place, temperature, feelsLike, description, icon, humidity, windSpeed, forecast: List<ForecastDay>)
 ForecastDay(label: String /* "YYYY-MM-DD" date string */, min: Int, max: Int, icon: String)
 ```
+
+### Affiliate (`data/affiliate/`)
+
+Sponsored products live only in `AffiliateViewModel` state (never Room, never `WardrobeRepository`):
+
+```kotlin
+AffiliateStore { MYNTRA, FLIPKART, AMAZON, VINTED }
+AffiliateItem(id, name, store, url /* https */, imageUrl, price, description, typeName, supertype)
+ShoppingContext(rainExpected, temperatureBand)      // derived from the 5-day forecast of the selected place
+AffiliateRegion.derive(countryCode)                 // IN → [MYNTRA, FLIPKART], Europe → [VINTED], else [AMAZON]
+AffiliateConfig.decorate(link, store, countryCode)  // AppConfig.AffiliateCodes; empty = plain URLs
+```
+
+- `AffiliateFeed` resolves the country (place's `countryCode`, lazy reverse-geocode for legacy places),
+  derives the `ShoppingContext`, runs the per-store adapters (`data/affiliate/adapters/`, one Ktor client per
+  store via `expect fun affiliateHttpClient(store)` with a browser User-Agent) concurrently, dedupes by
+  URL/name and caps at 4. All failures degrade silently; nothing is persisted (fresh fetch on
+  `WardrobeScreen` first composition).
+- Adapters are **API-first where a public API exists**: Amazon uses the Creators API
+  (`AmazonCreatorsApi`: LwA client-credentials token + `creatorsapi.amazon/catalog/v1/searchItems`,
+  `detailPageURL` pre-tagged with the partner tag) and Flipkart uses the official Affiliate API
+  (`FlipkartAffiliateApi`: `affiliate-api.flipkart.net/affiliate/1.0/search.json` with
+  `Fk-Affiliate-Id`/`Fk-Affiliate-Token` headers); both fall back to HTML scraping when the
+  credentials are empty. Myntra and Vinted have no public catalog API, so they use the scrapers
+  (see `writeups/2026-11-24-AFFILIATE-LINKS-NOTES.md`).
+- UI (`ui/wardrobe/`): `SponsoredClothingCard` (remote image via `expect suspend fun loadRemoteImagePainter`,
+  orange "Sponsored" badge, no price on the card), merged into the grid at positions 4/12/20/28 by
+  `mergeSponsoredIntoGrid`; empty wardrobe shows the strip beneath the message. `AffiliateDetailScreen`
+  shows store/price/type/description with a "Shop at <Store>" button opening
+  `PlatformBrowser.open(decorate(url))` in the external browser. `WardrobeScreen` receives the
+  shell-shared `AppWeatherState` from `App.kt`.
 
 ### Wardrobe (`data/wardrobe/`)
 
@@ -172,6 +204,19 @@ OutfitRecommendation(headwear, baseUpper, outerUpper, lowerBody, footwear)  // 5
   - Fields: name, type dropdown (required for new items; save disabled without it), material dropdown, notes. Uses `remember` (dialog-local) state.
   - Image: `rememberImagePickerKMP` (`GalleryConfig(allowMultiple = false)`, `CropConfig(enabled = isImageCropAvailable, squareCrop = true)`), "Select Image" / replace flow with `useNewImage` state, preview via `MediaStorage.loadPhotoPainter`.
   - On save: copies the picked photo to permanent storage (`MediaStorage.copyToPermanentStorage`) or reuses the existing path, then builds/updates a `ClothingPiece` (`thumbnailPath` currently always equals `imagePath`), and calls `onSave` (suspend; shows `saveError` on failure, keeps dialog open on repo failure).
+
+### 6.1a Sponsored affiliate items
+
+- `WardrobeScreen` collects `AffiliateViewModel` state and refreshes it on first composition and whenever
+  the shared `AppWeatherState`'s place/weather settle. Sponsored cards are filtered by the selected type
+  via their mapped `typeName` and sprinkled into the grid at positions 4, 12, 20, 28 (cap 4); with an empty
+  wardrobe they appear as a horizontal strip beneath the empty message. Tapping opens
+  `AffiliateDetailScreen` (own `rememberSaveable` transition state, mirroring the clothing detail).
+- Affiliate codes + API credentials: `AppConfig.AffiliateCodes` (git-ignored `AppConfig.kt`; shape in
+  `AppConfig.kt.template`) — per-country `amazonTags`, `amazonClientId`/`amazonClientSecret` (Creators API),
+  `flipkartCode`/`flipkartAffiliateToken` (Affiliate API), `myntraCode`, `vintedCode`. Applied at click
+  time by `AffiliateConfig.decorate` (idempotent) — Amazon per-country `tag=`, others `affid=`; empty
+  codes leave plain product URLs.
 
 ### 6.2 Weather tab (`ui/WeatherScreen.kt`)
 
