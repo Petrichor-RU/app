@@ -8,6 +8,17 @@
 - Use British English
 - Commit messages have a header, a line break, and a body. The header should be a single line of at most 56 characters. The body can have multiple lines, each of at most 72 characters.
 - Do not commit anything unless specifically instructed to do so
+- Never test on static text. For example, if a header says "This is a header", do not make a test that tests if the header says "This is a header".
+- Tests should make sense within the context of the project.
+- Reuse code when possible. If a certain routine is used in multiple places, consider extracting it into a reusable function or composable.
+- Consider giving each composable its own file. This is not always the solution, but it can make the code easier to understand and maintain.
+
+When reviewing, consider the following:
+- Is the code human-readable? Would a human be able to extend of modify the code?
+- Is the code well-structured, according to existing conventions?
+- Is the code easy to understand?
+- Does the code achieve what it's supposed to achieve in a concise and effective way?
+- Everything else you'd think of in a review
 
 For the clothing detail screen:
 - State should be remember. If I open a detail view, switch tabs, and go back, the detail view should still be open

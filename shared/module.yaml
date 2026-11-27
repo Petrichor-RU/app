@@ -31,6 +31,7 @@ dependencies@android:
   - $libs.androidx.core.ktx
   - $libs.androidx.work.runtime.ktx
   - $libs.compass.geolocation.mobile
+  - $libs.compass.geolocation.android.gms
   - $libs.ktor.client.cio
   - $libs.sqlite.bundled
 

@@ -2,6 +2,7 @@ package nl.petrichor.app.data.location
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class LocationSearchRepositoryTest {
@@ -23,6 +24,29 @@ class LocationSearchRepositoryTest {
         assertEquals(1, results.size)
         assertEquals("Galway, New York, United States", results.single().run { "$name, $region" })
         assertEquals(listOf("43.0186858,-74.0315162"), results.map { it.key }.distinct())
+    }
+
+    @Test
+    fun `results carry the alpha-2 country code from the geocoding payload`() {
+        val body =
+            """
+            [
+              {"name":"Amsterdam","state":"North Holland","country":"NL","lat":52.3676,"lon":4.9041},
+              {"name":"Mumbai","country":"IN","lat":19.076,"lon":72.8777}
+            ]
+            """.trimIndent()
+
+        val results = parseGeoResults(body)
+
+        assertEquals(listOf("NL", "IN"), results.map { it.countryCode })
+        assertEquals("NL", results.first().toPlace().countryCode)
+    }
+
+    @Test
+    fun `reverse geocoding parses the country code of the first result`() {
+        val body = """[{"name":"Amsterdam","country":"NL","lat":52.3676,"lon":4.9041}]"""
+        assertEquals("NL", parseReverseCountryCode(body))
+        assertNull(parseReverseCountryCode("[]"))
     }
 
     @Test

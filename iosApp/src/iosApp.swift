@@ -52,8 +52,13 @@ struct ContentView: View {
 @main
 struct iosApp: App {
     init() {
-        UNUserNotificationCenter.current().delegate = JournalNotificationDelegate.shared
-        NotificationScheduler.shared.requestAuthorization()
+        let center = UNUserNotificationCenter.current()
+        center.delegate = JournalNotificationDelegate.shared
+        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+            if granted {
+                NotificationScheduler.shared.scheduleDailyReminders()
+            }
+        }
     }
 
     var body: some Scene {
