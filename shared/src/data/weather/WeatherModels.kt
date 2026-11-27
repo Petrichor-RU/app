@@ -12,6 +12,13 @@ data class Coordinates(
 data class Place(
     val name: String,
     val coordinates: Coordinates,
+    /**
+     * ISO-3166 alpha-2 country code of the place, when known. Comes from the OpenWeather
+     * geocoding payload (search results) or the fallback place; legacy saved locations have
+     * null and resolve lazily via reverse geocoding (see LocationSearchRepository). Used to
+     * gate which affiliate store's sponsored items are shown (see data/affiliate).
+     */
+    val countryCode: String? = null,
 )
 
 data class WeatherSnapshot(

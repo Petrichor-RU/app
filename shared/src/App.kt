@@ -34,6 +34,7 @@ import dev.catbit.material_symbols.MaterialSymbols
 import dev.catbit.material_symbols.MaterialSymbolsRenderingScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import nl.petrichor.app.data.affiliate.AffiliateFeed
 import nl.petrichor.app.data.background.BackgroundConditionResolver
 import nl.petrichor.app.data.outfit.OutfitLogRepository
 import nl.petrichor.app.ui.background.AppBackgroundController
@@ -115,6 +116,18 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
         if (!inspection) OutfitLogRepository().ensureModelFresh()
     }
 
+    // One shared affiliate feed, pre-warmed at app start so the sponsored items are ready by the
+    // time the Wardrobe tab is opened (the pager only composes the visible tab). Only warmed once
+    // the weather snapshot exists — the shopping context comes from it, and a null-weather fetch
+    // must not populate the cache. The wardrobe's own refresh then hits the cache.
+    val affiliateFeed = remember { AffiliateFeed() }
+    LaunchedEffect(affiliateFeed, weatherState.place, weatherState.weather) {
+        val weather = weatherState.weather
+        if (!inspection && weather != null) {
+            affiliateFeed.fetch(weatherState.place, weather)
+        }
+    }
+
     // Notification deep links: animate to the Journal tab when an action is pending.
     LaunchedEffect(pendingJournalAction) {
         if (pendingJournalAction != null) {
@@ -162,6 +175,7 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
                             page = page,
                             weatherState = weatherState,
                             guideViewModel = guideViewModel,
+                            affiliateFeed = affiliateFeed,
                             pendingJournalAction = pendingJournalAction,
                             onActionConsumed = { JournalActionBus.consume() },
                         )
@@ -178,12 +192,13 @@ private fun AppTabContent(
     page: Int,
     weatherState: AppWeatherState,
     guideViewModel: GuideViewModel?,
+    affiliateFeed: AffiliateFeed,
     pendingJournalAction: JournalPendingAction?,
     onActionConsumed: () -> Unit,
 ) {
     when (page) {
         0 -> {
-            WardrobeScreen()
+            WardrobeScreen(weatherState = weatherState, affiliateFeed = affiliateFeed)
         }
 
         1 -> {

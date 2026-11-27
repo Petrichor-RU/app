@@ -1,12 +1,12 @@
 [versions]
-logback = "1.6.6"
+logback = "1.6.8"
 androidx-activity-compose = "1.13.0"
 androidx-core-ktx = "1.19.1"
 androidx-lifecycle = "2.11.0"
 androidx-work = "2.12.0"
 datastore = "1.3.0"
 kotlinx-coroutines = "1.11.0"
-ktor = "3.6.1"
+ktor = "3.6.2"
 compass = "4.0.1"
 material-symbols = "1.0.1"
 reorderable = "3.1.0"
@@ -38,8 +38,9 @@ ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
 ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
 ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
 compass-geolocation = { module = "dev.jordond.compass:geolocation", version.ref = "compass" }
-compass-geolocation-mobile = { module = "dev.jordond.compass:geolocation-mobile", version.ref = "compass" }
+compass-geolocation-android-gms = { module = "dev.jordond.compass:geolocation-android-gms", version.ref = "compass" }
 compass-geolocation-browser = { module = "dev.jordond.compass:geolocation-browser", version.ref = "compass" }
+compass-geolocation-mobile = { module = "dev.jordond.compass:geolocation-mobile", version.ref = "compass" }
 material-symbols = { module = "dev.catbit:material-symbols", version.ref = "material-symbols" }
 
 androidx-room-compiler = { group = "androidx.room3", name = "room3-compiler", version.ref = "room" }

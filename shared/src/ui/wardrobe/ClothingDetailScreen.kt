@@ -323,10 +323,11 @@ private fun ClothingDetails(
 }
 
 /**
- * Helper composable for displaying a detail row with icon, label and value
+ * Helper composable for displaying a detail row with icon, label and value.
+ * Internal so the affiliate detail screen reuses the same row style.
  */
 @Composable
-private fun DetailRow(
+internal fun DetailRow(
     icon: String,
     label: String,
     value: String,

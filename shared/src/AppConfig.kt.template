@@ -8,4 +8,15 @@ package nl.petrichor.app
 object AppConfig {
     const val OPENWEATHER_API_KEY = ""
     const val OPENWEATHER_API_BASE: String = "https://api.openweathermap.org"
+
+    /**
+     * Affiliate codes for the sponsored wardrobe items. Empty by default, so links stay plain
+     * product URLs until codes are filled in here.
+     */
+    object AffiliateCodes {
+        // Flipkart: affiliate tracking id (used as ?affid= on links and Fk-Affiliate-Id header)
+        // plus the Affiliate API token (Fk-Affiliate-Token header for affiliate-api.flipkart.net).
+        val flipkartCode: String? = null
+        val flipkartAffiliateToken: String? = null
+    }
 }
