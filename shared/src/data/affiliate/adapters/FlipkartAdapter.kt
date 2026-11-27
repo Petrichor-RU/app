@@ -31,7 +31,7 @@ import nl.petrichor.app.data.affiliate.typeNameToSearchTerm
 internal class FlipkartAdapter(
     private val client: HttpClient = affiliateHttpClient(),
     private val affiliateApi: FlipkartAffiliateApi =
-        FlipkartAffiliateApi(client, AppConfig.AffiliateCodes.flipkartCode, AppConfig.AffiliateCodes.flipkartAffiliateToken),
+        FlipkartAffiliateApi(client, AppConfig.AffiliateCodes.FLIPKART_CODE, AppConfig.AffiliateCodes.FLIPKART_AFFILIATE_TOKEN),
 ) : AffiliateAdapter {
     override suspend fun fetch(
         context: ShoppingContext,
@@ -166,7 +166,7 @@ internal class FlipkartAdapter(
      * This adapter owns all Flipkart-specific tagging: every item it builds carries a ready-to-go
      * affiliate URL, and the feed/UI just open [AffiliateItem.url] as-is.
      */
-    private fun affiliateUrl(url: String): String = flipkartAffiliateLink(url, AppConfig.AffiliateCodes.flipkartCode)
+    private fun affiliateUrl(url: String): String = flipkartAffiliateLink(url, AppConfig.AffiliateCodes.FLIPKART_CODE)
 
     /** Flipkart image URLs are templates: http://rukmini1.flixcart.com/image/{@width}/{@height}/...?q={@quality}. */
     private fun String.resolveImageTemplate(): String =

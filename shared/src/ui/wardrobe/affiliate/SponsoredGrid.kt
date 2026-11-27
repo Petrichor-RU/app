@@ -19,7 +19,9 @@ sealed interface WardrobeGridEntry {
     ) : WardrobeGridEntry
 }
 
-/** Sponsored-card count rule: `(wardrobe count) / 4`, clamped to [MIN_SPONSORED]..[MAX_SPONSORED]. */
+/** Sponsored-card count rule: `(wardrobe count) / 4`, clamped to [MIN_SPONSORED]..[MAX_SPONSORED].
+ * See also: MAX_AFFILIATE_ITEMS in AffiliateFeed.kt
+ * */
 private const val MIN_SPONSORED = 1
 private const val MAX_SPONSORED = 5
 
