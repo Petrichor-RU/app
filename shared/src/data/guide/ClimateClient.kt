@@ -25,7 +25,7 @@ private const val CLIMATE_API_BASE = "https://climate-api.open-meteo.com/v1/clim
  * The free tier grants 10,000 API calls per day, and a request's cost grows with the time
  * interval, the variables and the models: the full 1990-2020 range costs ~1,800 calls per
  * request, which exhausts the daily budget after only a handful of guide loads (HTTP 429).
- * A 10-year window (~600 calls) keeps the monthly normals stable while leaving room for many
+ * A 7-year window (~400 calls) keeps the monthly normals stable while leaving room for many
  * locations per day.
  */
 private const val CLIMATE_START_DATE = "2014-01-01"
