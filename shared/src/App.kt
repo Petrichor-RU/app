@@ -48,6 +48,7 @@ import nl.petrichor.app.ui.journal.JournalPendingAction
 import nl.petrichor.app.ui.journal.JournalScreen
 import nl.petrichor.app.ui.recommendation.RecommendationScreen
 import nl.petrichor.app.ui.wardrobe.WardrobeScreen
+import nl.petrichor.app.ui.weather.GuideViewModel
 import nl.petrichor.app.ui.weather.WeatherScreen
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -90,6 +91,7 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
 
     val inspection = LocalInspectionMode.current
     val controller = if (inspection) null else viewModel { AppBackgroundController() }
+    val guideViewModel = if (inspection) null else viewModel { GuideViewModel() }
     val weatherState = controller?.weather?.collectAsStateWithLifecycle()?.value ?: AppWeatherState()
     val condition =
         controller?.condition?.collectAsStateWithLifecycle()?.value
@@ -159,6 +161,7 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
                         AppTabContent(
                             page = page,
                             weatherState = weatherState,
+                            guideViewModel = guideViewModel,
                             pendingJournalAction = pendingJournalAction,
                             onActionConsumed = { JournalActionBus.consume() },
                         )
@@ -169,11 +172,12 @@ fun App(onDarkThemeChanged: (Boolean) -> Unit = {}) {
     }
 }
 
-/** Hosts the tab for [page], passing the shell-shared [weatherState] to the tabs that consume it. */
+/** Hosts the tab for [page], passing the shell-shared [weatherState] and [guideViewModel] to the tabs that consume them. */
 @Composable
 private fun AppTabContent(
     page: Int,
     weatherState: AppWeatherState,
+    guideViewModel: GuideViewModel?,
     pendingJournalAction: JournalPendingAction?,
     onActionConsumed: () -> Unit,
 ) {
@@ -194,7 +198,7 @@ private fun AppTabContent(
         }
 
         3 -> {
-            WeatherScreen(weatherState = weatherState, modifier = Modifier.statusBarsPadding())
+            WeatherScreen(weatherState = weatherState, guideViewModel = guideViewModel, modifier = Modifier.statusBarsPadding())
         }
     }
 }
