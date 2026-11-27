@@ -19,7 +19,7 @@ When reviewing, consider the following:
 - Is the code easy to understand?
 - Does the code achieve what it's supposed to achieve in a concise and effective way?
 - Everything else you'd think of in a review
-
+- Are the included (KDoc) comments consistent with the code?
 For the clothing detail screen:
 - State should be remember. If I open a detail view, switch tabs, and go back, the detail view should still be open
 - The opening animation should only play when opening the tab

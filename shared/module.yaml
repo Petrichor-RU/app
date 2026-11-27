@@ -14,6 +14,7 @@ dependencies:
   - $libs.androidx.lifecycle.viewmodel.compose
   - $libs.androidx.lifecycle.runtime.compose
   - $libs.ktor.client.core
+  - $libs.ktor.client.mock
   - $libs.kotlinx.datetime
   - $libs.compass.geolocation
   - $libs.material.symbols
